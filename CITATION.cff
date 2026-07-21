@@ -1,0 +1,76 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite it as below."
+title: "ecoTrace biogas-sensor pilot, Kiambu County, Kenya: sensor telemetry, gas composition, household survey and derivation code"
+abstract: >-
+  Sensor telemetry, reference gas-composition measurements and a de-identified
+  household survey from a household-biogas monitoring pilot on the ABPL digester
+  fleet in Kiambu County, Kenya (2026-01-27 to 2026-07-19), together with the
+  code that derives corrected gas flow and methane composition from the raw
+  device output. Covers 22 devices, 2,975 device-days and 5,499,810 telemetry
+  rows. The deployed firmware crossed the two thermistor ADC channels, so the
+  raw flow and composition columns are corrupted; the included derivation code
+  undoes the channel swap and recomputes both quantities.
+type: dataset
+license: CC-BY-4.0
+version: 0.1.0
+date-released: "2026-07-21"
+# doi: 10.5281/zenodo.XXXXXXX   # add once the Zenodo record is reserved
+repository-code: https://github.com/gh-bomad/ecotrace-pilot-data-kiambu
+keywords:
+  - biogas
+  - household energy
+  - anaerobic digestion
+  - sensor telemetry
+  - thermal flow sensor
+  - methane
+  - Kenya
+  - Kiambu
+authors:
+  - family-names: Tkaczuk
+    given-names: Jakub
+    email: jtkaczuk@ethz.ch
+    orcid: https://orcid.org/0000-0001-7997-9423
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
+  - family-names: Weber
+    given-names: Elia
+    email: elweber@ethz.ch
+    orcid: https://orcid.org/0009-0009-0937-8249
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
+  - family-names: Muntwyler
+    given-names: Fiona
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
+    email: fiona.muntwyler@inf.ethz.ch
+    orcid: https://orcid.org/0009-0008-1598-0001
+  - family-names: Ouma
+    given-names: Evance
+    email: evanceokoth14@gmail.com
+    affiliation: "Africa Bioenergy Program Ltd (ABPL), Kenya"
+  - family-names: Boyd-Williams
+    given-names: Natalie
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
+    email: nboydwilliams@ethz.ch
+    orcid: https://orcid.org/0000-0002-7409-2863
+  - family-names: Akelo
+    given-names: Jacktone
+    email: asp1084@spu.ac.ke
+    orcid: https://orcid.org/0000-0001-9812-3401
+    affiliation: "St. Paul's University, Kenya"
+  - family-names: Wasonga
+    given-names: Michael
+    email: mwasonga@kbp.co.ke
+    affiliation: "Africa Bioenergy Program Ltd (ABPL), Kenya"
+  - family-names: Tilley
+    given-names: Elizabeth
+    email: tilleye@ethz.ch
+    orcid: https://orcid.org/0000-0002-2095-9724
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
+  - family-names: Kinusu
+    given-names: Kevin
+    email: kkinusu@kbp.co.ke
+    affiliation: "Africa Bioenergy Program Ltd (ABPL), Kenya"
+contact:
+  - family-names: Tkaczuk
+    given-names: Jakub
+    email: jtkaczuk@ethz.ch
+    orcid: https://orcid.org/0000-0001-7997-9423
+    affiliation: "ETH Zurich, Global Health Engineering, Zurich, Switzerland"
