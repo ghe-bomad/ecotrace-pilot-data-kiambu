@@ -1,0 +1,17 @@
+# Derived data is regenerated from data/raw_data/ by src/derive.py.
+# Only the README is tracked; the CSVs themselves are never committed.
+data/derived_data/*
+!data/derived_data/README.md
+
+# Household survey — PII, not publishable until anonymized.
+data/survey.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
