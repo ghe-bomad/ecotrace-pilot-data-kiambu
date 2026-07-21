@@ -1,0 +1,234 @@
+{
+  "meta": {
+    "name": "biogas-sensor CFD calibration card",
+    "generated": "2026-06-27",
+    "supersedes": "2026-06-23 revision (buoyancy was the +7.9% cavity_box box-proxy; field correlations were pre-swap-fix). This revision folds in the structured real-cavity buoyancy sweep (real_cavity_buoyancy.md, 2026-06-27) and refreshes field correlations to the swap-corrected data-analysis pipeline.",
+    "source_repo": "/media/jtkaczuk/T7/biogas-sensor-cfd",
+    "purpose": "Self-contained input for the data-analysis (WS-B) field-correction session. Everything needed to recompute corrected flow + composition from field device powers.",
+    "key_docs": [
+      "analysis/sensor_calibration/deployed_vs_kingslaw.md (swap + deployed-algo analysis)",
+      "analysis/sensor_calibration/cfd_field_gap_diagnosis.md (CFD<->device absolute gap)",
+      "analysis/sensor_calibration/cfd_calibration_plane.md (both channels)",
+      "analysis/sensor_calibration/real_cavity_buoyancy.md (structured-cavity buoyancy: +11.9% comp enhancement, T-sweep, composition-slope flag)",
+      "analysis/sensor_calibration/field_numbers_provenance.md (field-side numbers are external data-analysis inputs; version-pin + swap-corrected re-issue)"
+    ]
+  },
+  "units": {
+    "T": "celsius (deployed poly); kelvin where noted",
+    "power": "mW",
+    "flow": "L/min",
+    "X_CH4": "mole fraction"
+  },
+  "absolute_power_scale": {
+    "half_to_full_mesh_correction": {
+      "status": "Half-mesh (base-sym) integrated powers are reported x2 (G12), but the heated bead straddles x=0 OFF-CENTRE (x in [-1.487,+1.687] mm; x<=0 portion = 46.73% of the bead), so x2 recovers only 93.47% of the true area -> half-mesh x2 powers read ~6.5% LOW vs a full mesh. CONFIRMED empirically 2026-07-02: install_baseline full-mesh straight power_flow 83.82 mW vs the dry-sweep half-mesh x2 76.29 mW at Q45/X50/T297 = x1.099.",
+      "factor": 1.065,
+      "factor_note": "x1.065 (geometric bead-area deficit; area 1/0.9347=1.070, measured power deficit ~1.055 since the missing +x pole is a below-average-flux region) applies to ALL half-mesh x2 absolute powers AND their derivatives. Turbulent power_flow (Q>=30) carries an ADDITIONAL ~+3% wake-suppression (the symmetry plane suppresses the antisymmetric shedding mode) -> ~x1.10 at Q45 (empirical 1.099); laminar power_flow (Q<=14) and all power_comp: x1.065 only.",
+      "scales_x1p065": "all absolute powers (power_comp/power_flow grid + anchors), King's-law a & b, katharometer G0/G_k/a/b, dP_comp/dX (3.92->4.18 mW/frac), dP_comp/dT (0.43->0.458 mW/K), the cfd_device_absolute_gap CFD-gas baseline, the buoyancy real anchor (10.257->10.92 mW). These are absolute powers or their derivatives -> they scale.",
+      "common_mode_unaffected": "King's-law exponent n(~0.573), katharometer R^2 + the P-proportional-to-k linearity, all %-deltas / fractional sensitivities, the buoyancy ON/OFF ratio (+11.9%), the swap correlations, device/lab-measured values, and T_at_temp_probe (areaAverage).",
+      "downstream_correction": "This SUPERSEDES the earlier (imprecise) 'dP/dX, dP/dT are common-mode' claim -> those SCALE (power derivatives). Effect on conclusions: CFD dP_comp/dT 0.43->0.458 shifts the Phase-2.6 decoupled gap vs lab 0.57 from 75%->~80% (geometric); with the buoyancy T-sweep contribution on top (also x1.065) it essentially closes (~0.565/0.57~99%). The device-gap offset was fitted to (device - CFD_gas), so raising CFD_gas x1.065 lowers the fitted lumped-lead G ~6% (more physical); the device-matched PREDICTION is unchanged (fitted to reconstruct device).",
+      "corrected_key_values_mW": "postflow power_comp X50 (291/297/303 K): 7.63/10.25/12.92 -> 8.13/10.92/13.76. Buoyancy-off anchor 10.257 -> 10.92 (x1.119 -> 12.22, was 11.47 raw). King's-law CFD-gas a 0.72->0.77, b 9.13->9.72 (exponent n=0.573 unchanged; the Q45 point is x1.10). ALL OTHER card blocks quote RAW x2 -> apply the factor for a full-mesh absolute level.",
+      "not_re_run_rationale": "a full-mesh re-run of the whole dry/wet campaign (~2x the multi-week Phase-2) is NOT justified: this is a documented, largely-common-mode absolute-scale factor absorbed by the ground-truth calibration constant; shapes/ratios/exponents are unaffected. The installation study is already full-mesh (swirl breaks symmetry).",
+      "source": "analysis/half_mesh_area_deficit.md; install_baseline full-vs-half (2026-07-02); analysis/sensor_calibration/half_to_full_mesh_correction.md"
+    }
+  },
+  "swap": {
+    "status": "CONFIRMED empirically (lab + field). NOTE the firmware SOURCE is NOT crossed (config.h + main.cpp verified naive 2026-06-26); the deployed units are effectively swapped UPSTREAM of source (per-unit ADC wiring or a divergent build). See deployed_vs_kingslaw.md.",
+    "device_powerC_is": "FLOW thermistor (CTA, rises with Q; field corr +0.596, lab T5S1_power_flow corr +0.835)",
+    "device_powerF_is": "COMP thermistor (cavity katharometer, flat/decreasing; field corr -0.563)",
+    "field_corr_provenance": "field correlations are swap-corrected values from kings_law_stats.json (regenerated) and field_numbers_provenance.md (data-analysis @ 3228c41, 2026-06-26). The 2026-06-23 card quoted pre-swap-fix +0.565/-0.636; the swap conclusion is unchanged, only the magnitudes refreshed. Treat all field-side numbers as external data-analysis inputs (re-issue from that repo), not CFD-internal results.",
+    "cfd_power_comp_maps_to_device": "powerF",
+    "cfd_power_flow_maps_to_device": "powerC",
+    "deployed_arg_convention": "calc_flow/calc_ratio PF-arg expects the FLOW thermistor power, PC-arg the COMP thermistor power (this 'naive' mapping recovers lab ground truth). The firmware feeds them SWAPPED, corrupting the deployed output (flow noisy-wrong, composition INVERTED).",
+    "fix_in_postproc": "rename device columns powerC<->powerF (and *_adj) so powerF=flow thermistor, powerC=comp thermistor; THEN apply deployed poly in natural order (un-inverts comp, de-noises flow)."
+  },
+  "deployed_polynomial": {
+    "form": "v = C + PF*pf + PC*pc + T*t + PF2*pf^2 + PFPC*pf*pc + PFT*pf*t + PC2*pc^2 + PCT*pc*t + T2*t^2;  pf=FLOW-thermistor power, pc=COMP-thermistor power, t=T[deg C]",
+    "flow": {
+      "C": 8.46018415,
+      "PF": -0.44761022,
+      "PC": 1.08183871,
+      "T": -1.65068626,
+      "PF2": 0.01550431,
+      "PFPC": -0.06302626,
+      "PFT": 0.06636865,
+      "PC2": 0.05050312,
+      "PCT": -0.11804773,
+      "T2": 0.0704689,
+      "clamp": [
+        0,
+        100
+      ]
+    },
+    "conc": {
+      "C": -0.45979628,
+      "PF": 0.06357058,
+      "PC": 0.04170046,
+      "T": -0.05493335,
+      "PF2": -0.00082725,
+      "PFPC": 0.00621735,
+      "PFT": -0.00652482,
+      "PC2": -0.01915579,
+      "PCT": 0.0355975,
+      "T2": -0.01578462,
+      "clamp": [
+        0,
+        1
+      ]
+    },
+    "validation_vs_lab_ground_truth": {
+      "flow_RMSE_Lmin": 0.7,
+      "conc_RMSE": 0.071,
+      "note": "with the naive/correct mapping"
+    }
+  },
+  "lab_cal_envelope": {
+    "Q_Lmin": [
+      4,
+      12
+    ],
+    "T_C": [
+      16,
+      33
+    ],
+    "conc": [
+      0.3,
+      0.7
+    ],
+    "note": "deployed poly is accurate INSIDE this box; outside (esp. Q>12) use the CFD-pinned extrapolation"
+  },
+  "flow_calibration": {
+    "lab_kings_law_device_scale": {
+      "a": 22.39,
+      "b": 6.665,
+      "n": 0.5,
+      "form": "P_flow = a + b*Q^n",
+      "valid": "Q<=12"
+    },
+    "cfd_kings_law_gas_scale": {
+      "a": 0.7176009036545005,
+      "b": 9.133911823626123,
+      "n": 0.5732724102616522,
+      "R2": 0.9887666576161901
+    },
+    "cfd_surface_QT": {
+      "form": "P_flow = (0.555+0.912*tk) + (9.323-0.051*tk)*Q^0.569, tk=T_K-297",
+      "R2": 0.99,
+      "comp": "biogas X50"
+    },
+    "pinned_extrapolation": {
+      "method": "keep CFD exponent n~0.569, refit (a,b) to lab anchors (Q=4,8,12); use for Q>12",
+      "validation": "at Q=45: CFD-pinned 69.1 mW vs lab sqrt(Q)-blind 67.1 mW (Delta +2 mW) => safe"
+    },
+    "inversion_to_flow": "Q = ((P_flow - a)/b)^(1/n)  (use lab a,b,n for Q<=12; pinned a,b,n=0.569 for Q>12)",
+    "convergence_limitation": {
+      "status": "the CFD King's-law points (cfd_kings_law_gas_scale, cfd_surface_QT) come from analysis/dry_sweep/phase_b_decoupled.csv (2026-06-18, decoupled), which PREDATES the 2026-06-27 flow settle batch and was NOT regenerated.",
+      "under_converged": "3 of 5 fit points were SIGTERMed mid-descent (trailing range Q10 ~11.6%, Q14 ~13.6%, Q30 ~16.8%); the settle batch showed high-Q power_flow was ~3% HIGH (coupled Q45 78.4 -> settled 76.2 mW). High-Q absolute power_flow also carries a PHYSICAL sphere-shedding band (+-5-25% pf_rng, Q>=30 above shedding onset); the LTS time-mean is the reported value.",
+      "impact_bounded": "the DEVICE flow inversion is INSULATED: it uses lab-anchored a,b (Q<=12) + lab-anchored pinned extrapolation (Q>12, taking only the CFD exponent n~0.57, which is robust). So the ~3% CFD absolute under-convergence does NOT propagate to device-facing Q; it affects only the CFD absolute b and the shape-validation R2. The PF-PC differential is also robust (shedding is largely common-mode).",
+      "source": "analysis/flow_channel_uras_and_convergence.md (open-item 1, 2026-06-27)"
+    }
+  },
+  "composition_calibration": {
+    "form": "P_comp = G0 + G_k*k(X_CH4,T)  [katharometer / TCD]",
+    "katharometer_by_T": {
+      "291": {
+        "G0": 0.06604918939223638,
+        "G_k": 14.496072218620549,
+        "a": 1.3209837878447275,
+        "b": 289.921444372411,
+        "R2": 0.9999371842027834
+      },
+      "297": {
+        "G0": 0.08669031802774438,
+        "G_k": 19.231704689120978,
+        "a": 1.7338063605548877,
+        "b": 384.63409378241954,
+        "R2": 0.999962586057779
+      },
+      "303": {
+        "G0": 0.10706737859190349,
+        "G_k": 23.918014548013836,
+        "a": 2.14134757183807,
+        "b": 478.36029096027676,
+        "R2": 0.9999749797688829
+      }
+    },
+    "sensitivity_validation": "dP_comp/dconc (buoyancy-OFF): CFD 3.9 vs lab 3.6 mW/frac (~8% match). The katharometer SHAPE (P_comp linear in gas k, per-T R2~1.000) is robust. CAVEAT: the buoyancy-ON cavity sweep FLATTENS this slope ~29% (see buoyancy_correction.composition_slope_flag), so the buoyancy-OFF slope is NOT conservative; treat the +8% match as a buoyancy-off result pending a full-geometry buoyancy run.",
+    "buoyancy_correction": {
+      "status": "CFD-quantified on a structured all-hex real-cavity mesh (cases/cavity_holes*, 2026-06-27). SUPERSEDES the 2026-06-23 cavity_box +7.9% box-proxy (the box's fully-open bottom let the plume leak; the holed dividing wall confines it, giving a larger enhancement).",
+      "what_it_corrects": "the ABSOLUTE level of the buoyancy-OFF katharometer plane only. The per-T fits and the slope SHAPE above are buoyancy-off; this block carries the plume's effect on absolute power_comp and on dP_comp/dT.",
+      "enhancement_pct_by_T": {
+        "291": 8.6,
+        "297": 11.9,
+        "303": 14.5,
+        "note": "absolute power_comp ON/OFF enhancement (X50); rises monotonically with T_inlet because the bead-to-housing dT drives the cavity plume. T297 ratio = 1.119."
+      },
+      "applied_anchor_mW": {
+        "point": "real-geometry X50 T297 decoupled postflow (postflow_buoycheck_nobuoy)",
+        "buoyancy_off": 10.257,
+        "buoyancy_on": 11.47,
+        "note": "10.257 x 1.119; was 11.07 with the +7.9% box ratio. Applied as a multiplicative ratio because the cavity model transfers the ON/OFF RATIO, not its absolute 18-26 mW level."
+      },
+      "dPcomp_dT_gap_closure": {
+        "real_off_mW_per_K": 0.43,
+        "real_on_mW_per_K": 0.53,
+        "lab_mW_per_K": 0.57,
+        "closes": "75% -> 93% (residual gap 25% -> 7%)",
+        "method": "ratio-transfer of the cavity-model enhancement + its T-trend onto the Phase 2.6 real decoupled anchor (NOT a full-geometry re-solve). Confirms the long-standing suspicion that buoyancy-off (G13) was the main remaining cause of the under-predicted dP_comp/dT after the Phase 2.6 T_amb decoupling closed the first ~75%."
+      },
+      "composition_slope_flag": {
+        "effect": "buoyancy enhancement DECREASES with CH4 (+13.3/+11.9/+10.4% at X40/X50/X60, T297) because the heavier low-CH4 gas drives a stronger plume -> cavity-model dP_comp/dX flattens -29% (0.646 -> 0.458 mW per 0.1 CH4). Ratio-transfer would shift CFD-vs-lab slope from +8% (OFF) to ~-19% (ON).",
+        "certainty": "DIRECTIONAL FLAG, weaker than the T result: the cavity-model absolute composition slope is ~1.6x the real postflow value, so the magnitude needs a full-geometry buoyancy run. Net: buoyancy-off UNDER-predicts dP_comp/dT (now corrected) but appears to OVER-predict dP_comp/dX -> the buoyancy-off plane was not uniformly biased."
+      },
+      "real_geometry_feasible": "the collapseEdges sliver repair (open-item 1) unblocks buoyancy-ON on the ACTUAL snappy geometry too (cases/buoy_real_X50_T297 survives past step 1, overturning the '16-attempt intractable' verdict), BUT p_rgh GAMG crawls near the 1000-iter cap and LTS is ~45 s/iter, so a full real-geometry sweep is impractical (~days). The structured-cavity ratios stand; a single converged real-geometry case would validate the absolute enhancement.",
+      "do_not_stack": "do NOT also apply this enhancement to cfd_device_absolute_gap.device_matched_plane: that offset model was fitted to the buoyancy-OFF gas baseline and already absorbs this same T-acceleration (see that block's residual_note).",
+      "source": "analysis/sensor_calibration/real_cavity_buoyancy.md, buoyancy_tsweep.csv, postflow_buoyancy_check.md (sec 8 superseded by real_cavity_buoyancy.md)"
+    }
+  },
+  "cfd_device_absolute_gap": {
+    "nature": "CFD computes GAS-side wall flux only; device = gas + radiation + lead conduction. ADDITIVE offset set by the bead hardware at the pinned bead T (= T_gas+20); grows with T.",
+    "do_not": "feed raw CFD absolute powers into the deployed poly (fails: flow->0/100, conc->0)",
+    "use_instead": "device-matched = CFD_gas + offset_model below; OR keep pinning to lab. Both equivalent.",
+    "offset_model_mW": {
+      "form": "offset = eps*sigma*A*(Tbead^4 - Tref^4) + G*(Tbead - Tref);  Tbead = T_gas_K + 20",
+      "eps": 0.9,
+      "eps_note": "FIXED at 0.9 (physical bead). Do NOT free eps: jointly fitting (eps,G) to the 3 comp points is ill-posed and returns eps=14.6, G=-2.1 (both unphysical).",
+      "A_m2": 2.83e-05,
+      "A_note": "physical 3 mm-dia sphere (4*pi*r^2, full sensor). NOT the mesh patch area (cavity_box thermistor_comp = 5.64e-5 full, ~2x: a geometric artifact).",
+      "G_mW_per_K": 0.393,
+      "G_note": "fitted on comp (eps fixed). = 2 leads, k~19 W/mK, 0.2 mm dia x 3 mm (textbook).",
+      "T_ref_K": 293.0,
+      "T_ref_note": "housing/PCB ~293 K (gas heated, rig not; consistent with Phase 2.6 (1) decoupled BC).",
+      "fit_quality_mW": 1.83,
+      "residual_note": "reproduces device-CFD offset to +-1.8 mW over 291-303 K. The residual is STRUCTURED (model curvature too weak at 303 K): rad+lead are ~linear over an 18-30 K overheat, but the device offset accelerates. The unexplained ~2-3 mW of top-end T-acceleration is now CONFIRMED to be gas-side buoyant convection (OFF in this CFD baseline, gotcha G13): the structured real-cavity buoyancy model (real_cavity_buoyancy.md, 2026-06-27) shows buoyancy-ON raises gas-side power_comp +8.6/+11.9/+14.5% at 291/297/303 K, steepening dP_comp/dT 0.43 -> 0.53 mW/K (toward lab 0.57). This offset model's gas baseline is buoyancy-OFF and was fitted to device-minus-CFD_gas_off, so it ALREADY absorbs that T-acceleration -- do NOT additionally apply the composition buoyancy_correction here (it would double-count)."
+    },
+    "cross_channel_validation": {
+      "method": "comp-fitted rad+lead model PREDICTS the flow offset (no flow re-fit). Device flow via lab King's law (a=22.39,b=6.665,n=0.5) interpolated to the CFD's own Q grid (fixes the diagnosis's device-Q8 vs CFD-Q10 mismatch).",
+      "comp_offset_T297_mW": 12.06,
+      "model_prediction_Tbead317_mW": 13.37,
+      "flow_offset_Q10_T297_mW": 13.23,
+      "flow_offset_Q14_T297_mW": 8.09,
+      "verdict": "comp offset 12.06, model 13.37, flow offset @Q10 13.23 -> agree to ~1.3 mW. ONE ~13 mW bead-hardware offset (pinned bead T, channel-independent) explains both the comp under-read and the flow offset. (Q14 = 8.09 uses device King's law extrapolated >12.)"
+    },
+    "in_solve_verdict": {
+      "decision": "accounting (post-processing), NOT in-solve. User decision 2026-06-23.",
+      "why": "bead T is PINNED (fixedValue T_gas+20), so in-solve radiation+lead are additive constants decoupled from the gas solve = identical to this accounting, no accuracy gain.",
+      "of13_source_verified": "the 'fluid' solver DOES carry radiation in EEqn (fvModels->radiation->Sh) and wallHeatFlux DOES add qr -- so in-solve IS possible, just pointless here.",
+      "P1_is_wrong": "P1 assumes a participating (absorbing) medium; for the transparent gas (a->0) its wall flux is dominated by numerical regularization, not physics. viewFactor is the correct surface-to-surface model but adds nothing under a pinned bead T.",
+      "surround_caveat": "in-solve radiation would exchange with the gas-WARMED cavity walls (~297-300 K), not the cold ~293 K housing the device radiates to -> in-solve would be LESS device-faithful than this analytical Tref=293 term.",
+      "lead_not_a_BC": "lead conduction is not a stock extra-sink on a fixedValue-T wall (lumpedMass lets T float, wrong for fixed-dT CTA); it would need a bead-solid CHT region."
+    },
+    "device_matched_plane": {
+      "apply": "device_power(Q,T,X) = CFD_gas_plane(Q,T,X) + offset_model(T).  offset depends only on T (via Tbead), not Q/X -> add it to ANY CFD plane point to get device-absolute power, including the Q>12 extrapolation region the lab box cannot reach.",
+      "comp_devMatched_mW_by_T": {
+        "291": 17.57,
+        "297": 23.62,
+        "303": 29.79
+      },
+      "comp_devMatched_note": "= CFD_gas + model; reconstructs device (16.27/22.31/31.62) to +-1.8 mW."
+    },
+    "comp_absolute_factor": "CFD ~0.45x device (small gas baseline, offset ~half the total)",
+    "flow_absolute_factor": "CFD ~0.7-0.8x device (large gas baseline, offset a small fraction)",
+    "provenance": "comp CFD: postflow_X50_T{291,297,303}; flow CFD: dry_sweep/biogas_X50/Q{10,14}_T297; OF13 radiation facts source-verified by the WS-A research workflow 2026-06-23."
+  }
+}

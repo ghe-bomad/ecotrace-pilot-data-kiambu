@@ -3,8 +3,11 @@
 data/derived_data/*
 !data/derived_data/README.md
 
-# Household survey — PII, not publishable until anonymized.
-data/survey.csv
+# Raw household survey export — direct identifiers (GPS, phone numbers, Kobo
+# keys). NEVER commit. data/survey.csv is the de-identified file built from it
+# by src/prepare_survey.py and IS published.
+data/survey_raw*.csv
+*_PRIVATE.csv
 
 # Python
 __pycache__/
