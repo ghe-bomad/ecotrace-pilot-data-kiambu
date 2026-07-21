@@ -53,6 +53,25 @@ possible, so the fix is applied in post-processing.
 Do not use the raw `flow` or `comp` columns at face value.
 Method, validation and limitations: [`docs/field_correction.md`](docs/field_correction.md).
 
+### You must filter to `state == 0`
+
+**`derive.py` does not filter by device state, and both corrected columns are
+meaningless outside state 0.** Non-NaN is not the same as valid. Skipping this
+step does not degrade a result slightly, it inverts it:
+
+- Take the per-sensor median of `comp_corrected` over every non-NaN row and you
+  get exactly 0.0 for all 22 sensors, an RMSE of 53.8 vol-% against the Dräger
+  reference. Filtering to `state == 0` first is what recovers agreement.
+- Integrate `flow_corrected` without filtering and roughly half the volume comes
+  from state-1 warm-up rows, where both thermistors are being driven hard to
+  reach setpoint and the King's-law inverse reads about 20 L/min while the
+  firmware itself correctly reports zero flow.
+
+Only about 15% of rows are `state == 0`. See
+[`data/metadata/states.csv`](data/metadata/states.csv) for every state and
+[`data/metadata/README.md`](data/metadata/README.md) for why the others produce
+plausible-looking but meaningless values.
+
 ### What `flow_corrected` can claim
 
 No reference flow meter was installed in the field, so absolute accuracy is **not
@@ -61,10 +80,14 @@ treat single-household absolute volumes as uncertain.
 
 It has been cross-validated at cohort level against an independent
 pressure-drawdown volume estimate (`ΔV = C·Δp` from dome compliance, which shares
-no sensor and no calibration constant with the thermal path). That comparison
-gives a cohort median ratio of 1.00 (IQR 0.71 to 1.15) over 1,613 matched
-device-days, with per-plant spread 0.42 to 1.83 attributed mainly to per-plant
-compliance rather than to the sensor.
+no sensor and no calibration constant with the thermal path), over 1,613 matched
+device-days from 15 plants.
+
+Taking each plant's median ratio and then summarising across plants: median 1.00,
+IQR 0.71 to 1.15, range 0.42 to 1.83. The spread is attributed mainly to
+per-plant compliance rather than to the sensor. At the level of individual
+device-days the distribution is wider, median 0.90 with IQR 0.57 to 1.33, which
+is the figure to quote for what a single day at a single household is worth.
 
 **That analysis is not part of this deposit.** It lives in the companion
 analysis repository (see [Related repositories](#related-repositories)), which
@@ -86,12 +109,22 @@ informed consent was obtained from every participating household, covering
 continuous monitoring, the survey, collection of location data, and release of
 anonymized data.
 
-GPS coordinates, phone numbers and all survey record keys have been removed; the
-published survey is a de-identified 17-variable extract. **With n = 20 households
-k-anonymity is not achievable**, and the `sensor` column links each household to
-six months of minute-resolution telemetry. Re-users must not attempt
+GPS coordinates, phone numbers and all survey record keys have been removed from
+`data/survey.csv`, which is a de-identified 17-variable extract. **With n = 20
+households k-anonymity is not achievable**, and the `sensor` column links each
+household to six months of minute-resolution telemetry. Re-users must not attempt
 re-identification of households or individuals. See
 [`data/README.md`](data/README.md) for the full disclosure assessment.
+
+**Before depositing or archiving, check what you are packaging.** The raw
+KoboToolbox export carries sub-metre GPS fixes and phone numbers for all 20
+households. It is excluded by `.gitignore`, so anything built from the git
+history is safe, but zipping the working directory is not: `.gitignore` does not
+apply. Build the deposit from a clean clone or a `git archive`, and confirm with
+
+```bash
+git ls-files | grep -i survey     # must list only data/survey.csv
+```
 
 ## Citation
 

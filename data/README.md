@@ -36,9 +36,8 @@ strings. Keys are bare device numbers (`"01001"`), not `SN_` prefixed.
 ## `survey.csv`
 
 20 households, 17 variables, one row per household, joined to telemetry by
-`sensor`. Built from a private KoboToolbox export by
-[`../src/prepare_survey.py`](../src/prepare_survey.py); the raw export is never
-committed.
+`sensor`. Reduced from a private KoboToolbox export of 152 columns; the raw
+export is never committed and is not part of this deposit.
 
 | column | type | description |
 |---|---|---|

@@ -93,10 +93,17 @@ level against an independent pressure-drawdown volume estimate (`ΔV = C·Δp` f
 dome compliance, which is composition-blind and shares no sensor or calibration
 constant with the thermal path):
 
-- cohort **median ratio 1.00**, IQR 0.71 to 1.15, across 1,613 matched device-days
-- per-plant spread 0.42 to 1.83, attributed mainly to per-plant compliance `C`
-  (silt accumulation, build quality, dome geometry), which biases the *pressure*
-  side
+Based on 1,613 matched device-days from 15 plants:
+
+- summarising **per-plant medians** across the 15 plants: median **1.00**, IQR
+  0.71 to 1.15, range 0.42 to 1.83
+- at the level of **individual device-days**: median 0.90, IQR 0.57 to 1.33
+
+Quote the per-plant figure for cohort agreement and the device-day figure for
+what a single household-day is worth; they are different populations and the
+per-plant one is the tighter of the two. The spread is attributed mainly to
+per-plant compliance `C` (silt accumulation, build quality, dome geometry),
+which biases the *pressure* side.
 
 This agreement holds *including* the 31% of volume above the calibration
 ceiling, so the extrapolation is supported end to end rather than merely assumed.
