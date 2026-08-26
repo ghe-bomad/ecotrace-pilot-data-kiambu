@@ -15,7 +15,7 @@ license: CC-BY-4.0
 version: 0.1.0
 date-released: "2026-07-21"
 # doi: 10.5281/zenodo.XXXXXXX   # add once the Zenodo record is reserved
-repository-code: https://github.com/gh-bomad/ecotrace-pilot-data-kiambu
+repository-code: https://github.com/ghe-bomad/ecotrace-pilot-data-kiambu
 keywords:
   - biogas
   - household energy

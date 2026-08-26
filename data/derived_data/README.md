@@ -109,11 +109,12 @@ This agreement holds *including* the 31% of volume above the calibration
 ceiling, so the extrapolation is supported end to end rather than merely assumed.
 
 **This comparison is not reproducible from this repository.** The pressure-based
-volume derivation and the comparison against `flow_corrected` both live in the
-companion analysis repository, `ecotrace-pilot-analysis-kiambu`. The numbers are
-quoted here so that anyone using `flow_corrected` knows what evidence supports
-it; verify them there. `flow_corrected` itself depends on none of it. It is a
-function of the raw Parquet alone.
+volume derivation and the comparison against `flow_corrected` both live in
+the technical paper's code (see the dataset README's [Related
+work](../../README.md#related-work)). The numbers are quoted here so that
+anyone using `flow_corrected` knows what evidence supports it; verify them
+there. `flow_corrected` itself depends on none of it. It is a function of the
+raw Parquet alone.
 
 Two limits on the underlying fit are worth stating plainly. The King's-law
 exponent `n = 0.5` was **assumed, not fitted**. And the advertised R² = 0.9992 is

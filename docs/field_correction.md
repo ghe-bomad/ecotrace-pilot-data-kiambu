@@ -1,10 +1,11 @@
 # Field-data correction: firmware powerF/powerC swap + recomputed flow & composition
 
-*Generated 2026-06-23 (WS-B). Inputs from the CFD calibration card:*
-`/media/jtkaczuk/T7/biogas-sensor-cfd/analysis/sensor_calibration/calibration_card.json`
-*(+ `deployed_vs_kingslaw.md`, `cfd_field_gap_diagnosis.md`, `cfd_calibration_plane.md`).*
-
-> This document lives in `docs/` because `analysis/` is git-ignored in this repo.
+*Generated 2026-06-23 (WS-B). Inputs from the CFD calibration card, vendored in
+this repository at [`data/metadata/calibration_card.json`](../data/metadata/calibration_card.json)
+(+ its companion notes `deployed_vs_kingslaw.md`, `cfd_field_gap_diagnosis.md`
+and `cfd_calibration_plane.md`, part of the sensor-calibration analysis in the
+technical paper's code — see the dataset README's
+[Related work](../README.md#related-work)).*
 
 ## 1. The problem
 
@@ -19,7 +20,8 @@ result the device emits, contrary to the column names:
 
 and the firmware-derived `flow` column is **noisy-wrong** while `comp` is
 **inverted**. This cannot be fixed in firmware (no OTA), so it is corrected in
-post-processing at the single central ingest step (`src/parquet_to_csv.py`).
+post-processing at the single central ingest step (`src/derive.py`, which applies
+`src/sensor_correction.py`).
 
 ### Evidence (empirical, this dataset)
 
@@ -98,8 +100,7 @@ Analysis code was migrated to the corrected columns: `flow → flow_corrected`,
 it was fit on the old `powerC_adj`, which was the flow thermistor; post-swap
 that column is the comp thermistor, so the fit no longer applies. CH₄ now comes
 from `comp_corrected × 100`. Firmware `flow`/`comp` are kept only for
-before/after illustration (the DuckDB diagnostics `analyze.py` / `src/analyze.py`
-read raw parquet and are labelled firmware-uncorrected).
+before/after illustration.
 
 ## 3. Validation & the composition window
 

@@ -8,7 +8,7 @@ from the raw device output.
 **22 devices · 2,975 device-days · 5,499,810 rows · 2026-01-27 to 2026-07-19**
 
 This repository is the **dataset**. Analysis and figure code for the papers lives
-in separate repositories (see [Related repositories](#related-repositories)).
+in separate repositories (see [Related work](#related-work)).
 
 ## Quick start
 
@@ -89,13 +89,13 @@ per-plant compliance rather than to the sensor. At the level of individual
 device-days the distribution is wider, median 0.90 with IQR 0.57 to 1.33, which
 is the figure to quote for what a single day at a single household is worth.
 
-**That analysis is not part of this deposit.** It lives in the companion
-analysis repository (see [Related repositories](#related-repositories)), which
-derives the pressure-based volumes and performs the comparison. The figures
-quoted here are reported for context, so that users of `flow_corrected` know what
-evidence stands behind it; to reproduce or scrutinise them, go to that
-repository. Nothing in this repository depends on that analysis. `derive.py`
-produces `flow_corrected` from the raw Parquet alone.
+**That analysis is not part of this deposit.** It belongs to the technical paper
+(see [Related work](#related-work)), whose code derives the pressure-based
+volumes and performs the comparison. The figures quoted here are reported for
+context, so that users of `flow_corrected` know what evidence stands behind it;
+to reproduce or scrutinise them, see that paper's code. Nothing in this
+repository depends on that analysis. `derive.py` produces `flow_corrected` from
+the raw Parquet alone.
 
 Further limits on the underlying calibration are described in
 [`data/derived_data/README.md`](data/derived_data/README.md).
@@ -143,15 +143,25 @@ This repository is dual-licensed, because data and software have different needs
   than software and do not address patent grants; Apache-2.0 includes an express
   patent grant.
 
-## Related repositories
+## Related work
 
-| repository | contents |
-|---|---|
-| this one | raw data, derivation code, metadata, de-identified survey |
-| `ecotrace-pilot-analysis-kiambu` | analysis and figure code for both papers, including the CFD work and the pressure-drawdown volume estimate and its comparison against `flow_corrected`; depends on this dataset by DOI |
+This dataset is the empirical basis for two papers. Their analysis and figure
+code is cited here by title rather than linked by repository, so the reference
+does not break if that code moves or is renamed:
+
+- Tkaczuk, J., Weber, E. & Muntwyler, F. *ecoTrace biogas-sensor pilot, Kiambu
+  County, Kenya: sensor, calibration and CFD code.*
+  <!-- DOI: add at release -->
+  The technical paper: sensor, calibration, the OpenFOAM CFD work, and the
+  pressure-drawdown volume estimate used above to cross-validate
+  `flow_corrected`.
+- Tkaczuk, J., Weber, E. & Muntwyler, F. *ecoTrace biogas-sensor pilot, Kiambu
+  County, Kenya: installation and feasibility figure code.*
+  <!-- DOI: add at release -->
+  The installation and feasibility short communication.
 
 Data and analysis are separated deliberately: they carry different licences, have
 different release cycles, and are cited differently. The boundary is that this
 repository contains everything needed to turn raw device output into the derived
 measurements, and nothing beyond it. Every downstream comparison, model and
-figure lives in the analysis repository.
+figure lives in the paper repositories.
