@@ -3,7 +3,7 @@
     "name": "biogas-sensor CFD calibration card",
     "generated": "2026-06-27",
     "supersedes": "2026-06-23 revision (buoyancy was the +7.9% cavity_box box-proxy; field correlations were pre-swap-fix). This revision folds in the structured real-cavity buoyancy sweep (real_cavity_buoyancy.md, 2026-06-27) and refreshes field correlations to the swap-corrected data-analysis pipeline.",
-    "source_repo": "the sensor paper's cfd/analysis/sensor_calibration/ (see the dataset README's Related work)",
+    "source_repo": "the sensor paper's cfd/ directory (key_docs paths are relative to it; see the dataset README's Related work)",
     "purpose": "Self-contained input for the data-analysis (WS-B) field-correction session. Everything needed to recompute corrected flow + composition from field device powers.",
     "key_docs": [
       "analysis/sensor_calibration/deployed_vs_kingslaw.md (swap + deployed-algo analysis)",
