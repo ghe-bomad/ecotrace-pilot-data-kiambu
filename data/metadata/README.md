@@ -41,16 +41,22 @@ here is checkable against the source.
 | `led_pattern` | field diagnostic |
 | `firmware_ref` | `file:line` in the firmware repository |
 
-Only codes **0, 1 and 5** occur in this dataset. States 2, 3, 4 and 6 are defined
-by the firmware but never entered.
+Codes **0, 1, 5 and 6** occur in this dataset. Low voltage (6) is rare: 866
+rows on three units (SN_01004: 291, SN_01012: 473, SN_01013: 102). States 2, 3
+and 4 are defined by the firmware but never entered.
 
 ### State 0 is the only usable state
 
-**Filter to `state == 0` before any quantitative use.** States 1 and 5 produce
-plausible-looking but meaningless derived values. During warm-up (state 1) both
-thermistors are driven hard to reach setpoint, and the King's-law inverse reads
-that power as roughly 20 L/min of flow on rows where the firmware itself
-correctly reports zero. Sleep (state 5) is the most common state in the dataset.
+`derive.py` keeps only `state == 0` rows, so the derived CSVs carry nothing
+else. **If you read the raw Parquet directly, apply that filter yourself before
+any quantitative use.** States 1, 5 and 6 produce plausible-looking but
+meaningless derived values. During warm-up (state 1) both thermistors are
+driven hard to reach setpoint, and the King's-law inverse reads that power as
+flow (a median of 0.04 L/min, but 27 L/min at the 90th percentile and 53 at
+the 99th) on rows where the firmware itself correctly reports zero; unfiltered,
+56% of the integrated volume sits in state 1. Sleep (state 5) is the most
+common state in the dataset; both thermistors are at zero power there, and the
+composition polynomial clamps to exactly 0.
 
 ### Two firmware behaviours that shape the data
 
@@ -75,8 +81,9 @@ equivalence class, and its real meaning is simply "the firmware reports no flow.
 
 The calibration constants used by
 [`../../src/sensor_correction.py`](../../src/sensor_correction.py), vendored
-verbatim from the CFD and lab calibration work so this repository is
-self-contained. Byte-identical to its source.
+from the CFD and lab calibration work so this repository is self-contained.
+Identical to its source except for the `meta.source_repo` field, which was
+rewritten to describe the sensor paper's repository instead of a local path.
 
 Contains the deployed 10-term polynomials, the lab and CFD King's-law fits, the
 lab calibration envelope, and composition-calibration parameters. The correction

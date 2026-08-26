@@ -1,8 +1,8 @@
 """Tests for the field-data swap correction + recomputed flow/composition.
 
-Validation anchors come from the CFD calibration card
-(/media/jtkaczuk/T7/biogas-sensor-cfd/analysis/sensor_calibration/calibration_card.json)
-and from the empirical field check in this session:
+Validation anchors come from the CFD calibration card, vendored in this
+repository at data/metadata/calibration_card.json, and from the empirical field
+check documented in docs/field_correction.md:
 
   - lab King's law  P = 22.39 + 6.665*Q^0.5   (Q <= 12)
   - CFD-pinned       keep n=0.5733, refit (a,b) to lab anchors Q=4,8,12; use for Q>12
@@ -126,8 +126,6 @@ def _toy_df():
         "comp": [0.2, 0.2],           # firmware (inverted) comp
         "powerC": [38.0, 27.0],       # device: FLOW thermistor
         "powerF": [24.0, 26.0],       # device: COMP thermistor
-        "powerC_adj": [37.0, 26.5],
-        "powerF_adj": [23.5, 25.5],
     })
 
 
@@ -137,8 +135,6 @@ def test_swap_fix_swaps_power_columns():
     # after swap: powerF carries the FLOW thermistor (old powerC), powerC the COMP thermistor
     assert list(df["powerF"]) == list(src["powerC"])
     assert list(df["powerC"]) == list(src["powerF"])
-    assert list(df["powerF_adj"]) == list(src["powerC_adj"])
-    assert list(df["powerC_adj"]) == list(src["powerF_adj"])
 
 
 def test_swap_fix_preserves_device_native_raw():
@@ -193,7 +189,6 @@ def test_composition_restricted_to_valid_temperature_window():
         "state": [0.0, 0.0, 0.0], "temp": [25.0, 40.0, 10.0],
         "flow": [0.0, 0.0, 0.0], "comp": [0.2, 0.2, 0.2],
         "powerC": [27.0, 27.0, 27.0], "powerF": [24.0, 24.0, 24.0],
-        "powerC_adj": [26.0, 26.0, 26.0], "powerF_adj": [23.0, 23.0, 23.0],
     })
     out = sc.add_corrected_columns(sc.apply_swap_fix(df))
     lo, hi = sc.TEMP_VALID
@@ -221,8 +216,6 @@ def test_real_sn01001_composition_unwinds_inversion():
     from the firmware-corrupted ~0.20."""
     fs = sorted(glob.glob(str(RAW / "SN_01001" / "*.parquet")))
     df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
-    df["powerC_adj"] = df.powerC - (0.292772 + 0.026573 * df.powerC) * (df.temp - 25)
-    df["powerF_adj"] = df.powerF - (0.411242 - 0.003439 * df.powerF) * (df.temp - 25)
     df = sc.add_corrected_columns(sc.apply_swap_fix(df))
     m = df[(df.state == 0)].dropna(subset=["comp_corrected"])
     postflow = m[m.flow < 0.5]            # low-flow window ~ composition regime
@@ -230,3 +223,61 @@ def test_real_sn01001_composition_unwinds_inversion():
     assert 0.40 <= med <= 0.58, med       # biogas band, near GT 0.497
     # the firmware comp column is inverted/wrong (~0.20); we must be clearly above it
     assert med > m["comp"].mean() + 0.1
+
+
+# --------------------------------------------------------------------------
+# derive.py: the state filter is applied at ingest, not left to the caller
+# --------------------------------------------------------------------------
+def _raw_day_df():
+    """One device-day as the firmware emits it: sensor rows in states 0, 1, 5
+    and 6 interleaved with a null-state heartbeat row."""
+    return pd.DataFrame({
+        "timestamp": pd.to_datetime(["2026-02-01T00:00Z", "2026-02-01T00:01Z",
+                                     "2026-02-01T00:02Z", "2026-02-01T00:03Z",
+                                     "2026-02-01T00:04Z"]),
+        "state": [1.0, 0.0, 5.0, np.nan, 6.0],
+        "temp": [25.0, 25.0, 25.0, np.nan, 25.0],
+        "pressure": [1.0, 1.0, 1.0, np.nan, 1.0],
+        "flow": [0.0, 0.0, 0.0, np.nan, 0.0],
+        "comp": [0.2, 0.2, 0.2, np.nan, 0.2],
+        "powerC": [55.0, 27.0, 0.0, np.nan, 0.0],
+        "powerF": [40.0, 24.0, 0.0, np.nan, 0.0],
+        "battery_volt": [np.nan, np.nan, np.nan, 3.9, np.nan],
+        "rssi_dbm": [np.nan, np.nan, np.nan, -80.0, np.nan],
+    })
+
+
+def test_derive_emits_only_state_zero_rows(tmp_path):
+    import derive
+    src = tmp_path / "2026-02-01.parquet"
+    dst = tmp_path / "2026-02-01.csv"
+    _raw_day_df().to_parquet(src)
+    assert derive.convert_file(src, dst) == "ok"
+    out = pd.read_csv(dst)
+    assert list(out.columns) == derive.OUTPUT_COLUMNS
+    assert len(out) == 1
+    assert (out["state"] == 0).all()
+    # the warm-up row (state 1) would have read ~7 L/min; it must not survive
+    assert out["flow_corrected"].max() < 1.0
+
+
+def test_derive_skips_day_without_state_zero_rows(tmp_path):
+    import derive
+    df = _raw_day_df()
+    df = df[df["state"] != 0]
+    src = tmp_path / "2026-02-02.parquet"
+    dst = tmp_path / "2026-02-02.csv"
+    df.to_parquet(src)
+    status = derive.convert_file(src, dst)
+    assert status.startswith("no-state-0")
+    assert not dst.exists()
+
+
+def test_derive_output_columns_exclude_corrupted_and_heap_fields():
+    """The firmware flow/comp columns are corrupted by the swap and mem_free is
+    heap telemetry; none of them belongs in the published schema."""
+    import derive
+    for col in ("flow", "comp", "mem_free"):
+        assert col not in derive.OUTPUT_COLUMNS
+    for col in ("battery_volt", "rssi_dbm"):
+        assert col in derive.OUTPUT_COLUMNS

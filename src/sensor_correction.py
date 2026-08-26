@@ -16,11 +16,14 @@ fixed in firmware (no OTA), so we correct in post-processing.
 
 What we do
 ----------
-1. :func:`apply_swap_fix` renames ``powerC<->powerF`` (and ``*_adj``) so that
-   after correction ``powerF`` holds the FLOW thermistor and ``powerC`` the COMP
-   thermistor -- the convention the deployed polynomial actually expects. The
-   device-native values are preserved as ``powerC_raw`` / ``powerF_raw`` and a
-   ``swap_corrected`` provenance flag is set (the operation is idempotent).
+1. :func:`apply_swap_fix` swaps ``powerC<->powerF`` so that after correction
+   ``powerF`` holds the FLOW thermistor and ``powerC`` the COMP thermistor -- the
+   convention the deployed polynomial actually expects. The device-native values
+   are kept in the frame as ``powerC_raw`` / ``powerF_raw`` (``derive.py`` does
+   not publish them: they are bit-identical to the swapped columns) and a
+   ``swap_corrected`` provenance flag is set. The function REFUSES a frame that
+   already carries the flag: applying the swap twice would silently restore the
+   firmware's crossed assignment.
 2. :func:`add_corrected_columns` adds:
    * ``comp_corrected`` -- CH4 mole fraction from the deployed conc polynomial
      applied in natural order on the swap-fixed RAW powers (this un-inverts it;
@@ -31,15 +34,21 @@ What we do
    * ``flow_corrected`` -- L/min from a King's-law inverse on the flow-thermistor
      RAW power: the lab CTA fit for Q<=12, the CFD-pinned extrapolation for Q>12.
 
-The deployed 10-term FLOW polynomial was REMOVED (it previously produced a
-``flow_corrected_poly`` column). It is unphysical -- it has no zero, returning
+The deployed 10-term FLOW polynomial is deliberately NOT implemented. It is
+unphysical -- it has no zero, returning
 ~11 L/min at 25 C and ~22 L/min at 30 C with both thermistor powers at exactly
 0 -- and it reproduced the firmware's own corrupted ``flow`` column at r ~ +0.97,
 so it was a re-derivation of the corrupted signal rather than an independent
-cross-check. Flow now comes solely from the King's-law inverse, which is
-validated end to end against the independent pressure-drawdown volume estimate
-(cohort median ratio ~1.00). The CONC polynomial is unaffected and retained: it
-is the only path to ``comp_corrected``.
+cross-check. Flow comes solely from the King's-law inverse, which has been
+cross-validated at cohort level against an independent pressure-drawdown volume
+estimate in the technical paper (per-plant median ratio ~1.00; see
+``data/derived_data/README.md``). The CONC polynomial is the only path to
+``comp_corrected``.
+
+Neither function filters by device state. That is ``derive.py``'s job: it keeps
+only state-0 rows before calling these, because outside state 0 the thermistor
+powers reflect warm-up or sleep, not gas, and both corrected quantities come out
+plausible-looking but meaningless.
 
 All constants below are transcribed from the CFD calibration card, vendored into
 this repository as ``data/metadata/calibration_card.json`` so the derivation is
@@ -156,9 +165,9 @@ def kings_flow(power_flow_therm):
 
 
 # ---------------------------------------------------------------------------
-# DataFrame transforms (used by the ingest src/parquet_to_csv.py)
+# DataFrame transforms (used by the ingest src/derive.py)
 # ---------------------------------------------------------------------------
-_SWAP_PAIRS = [("powerC", "powerF"), ("powerC_adj", "powerF_adj")]
+_SWAP_PAIRS = [("powerC", "powerF")]
 
 # Composition is only valid in the device's no-flow window: the deployed conc
 # poly recovers the Drager X-am 8000 reference (RMSE ~7.3 vol-%) only when the
@@ -180,9 +189,8 @@ def apply_swap_fix(df: pd.DataFrame) -> pd.DataFrame:
     """Undo the firmware powerF/powerC swap. DEVICE-NATIVE INPUT ONLY.
 
     Preserves the device-native powers as ``powerC_raw`` / ``powerF_raw``, swaps
-    ``powerC<->powerF`` and ``powerC_adj<->powerF_adj`` so that afterwards
-    ``powerF`` = FLOW thermistor and ``powerC`` = COMP thermistor, and sets the
-    ``swap_corrected`` provenance flag.
+    ``powerC<->powerF`` so that afterwards ``powerF`` = FLOW thermistor and
+    ``powerC`` = COMP thermistor, and sets the ``swap_corrected`` provenance flag.
 
     Raises ``ValueError`` on a frame that is already swap-corrected. This is a
     hard error rather than a silent no-op because applying the swap twice
@@ -214,12 +222,12 @@ def apply_swap_fix(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_corrected_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Add ``comp_corrected``, ``flow_corrected`` and ``flow_corrected_poly``.
+    """Add ``comp_corrected`` and ``flow_corrected``.
 
     Expects a swap-fixed frame (``powerF`` = flow thermistor, ``powerC`` = comp
-    thermistor). Uses the RAW swapped powers and temperature in deg C; the
-    deployed polynomials carry their own T-dependence so they take raw, not the
-    T-detrended ``*_adj`` powers.
+    thermistor) and ``temp`` in deg C. The deployed polynomial and the King's-law
+    fit were calibrated on raw device-scale powers and carry their own
+    temperature dependence, so no temperature detrending is applied first.
     """
     if not bool(df.get("swap_corrected", pd.Series([False])).all()):
         raise ValueError("add_corrected_columns requires apply_swap_fix first")

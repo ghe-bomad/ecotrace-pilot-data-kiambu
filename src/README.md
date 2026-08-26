@@ -6,19 +6,17 @@ Analysis and figure code for the papers lives in separate repositories; see the
 
 | file | purpose |
 |---|---|
-| `derive.py` | ingest: raw Parquet to derived CSVs |
+| `derive.py` | ingest: raw Parquet to derived CSVs; keeps state-0 rows only, then applies the correction |
 | `sensor_correction.py` | the channel-swap fix and the corrected quantities |
-| `prepare_survey.py` | private survey export to published de-identified CSV |
 | `test_sensor_correction.py` | unit and integration tests for the correction |
 
 ```bash
 pip install -r ../requirements.txt
-python3 derive.py                 # ~40 s -> data/derived_data/, 2828 files
+python3 derive.py                 # ~15 s -> data/derived_data/, 2715 files
 python3 -m pytest test_sensor_correction.py
 ```
 
-`derive.py` accepts `--raw`, `--out` and `--quiet`. `prepare_survey.py` requires
-`--raw` pointing at the private export, which is not in this repository.
+`derive.py` accepts `--raw`, `--out` and `--quiet`.
 
 ## `sensor_correction.py`
 
@@ -54,14 +52,15 @@ r ≈ +0.97, so it was a re-derivation of the corrupted signal rather than an
 independent estimate. The **conc** polynomial is retained and is the only path
 to `comp_corrected`.
 
-The temperature-detrended `powerC_adj` and `powerF_adj` columns are also gone.
-They were exactly recomputable from the retained columns (max error 7e-15) and
-their detrend coefficients had no traceable provenance.
+No temperature-detrended `powerC_adj` / `powerF_adj` columns are produced. The
+deployed polynomial and the King's-law fit carry their own temperature terms,
+and the detrend coefficients used in earlier internal revisions had no traceable
+provenance.
 
 ## Testing
 
-19 tests: the polynomial and King's-law formulas against their documented forms,
+22 tests: the polynomial and King's-law formulas against their documented forms,
 the swap fix and its guard (including on the reduced published schema), the
-validity masks on `comp_corrected`, and an integration check against real field
-data. `test_deployed_flow_polynomial_is_gone` asserts the removed polynomial
+validity masks on `comp_corrected`, the state filter and fixed output schema of
+`derive.py`, and an integration check against real field data. `test_deployed_flow_polynomial_is_gone` asserts the removed polynomial
 stays removed.

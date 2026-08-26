@@ -6,7 +6,7 @@ All data from the ecoTrace biogas-sensor pilot, Kiambu County, Kenya,
 | path | what | tracked |
 |---|---|---|
 | [`raw_data/`](raw_data/) | per-device daily telemetry, Parquet | yes, 207 MB |
-| [`derived_data/`](derived_data/) | swap-corrected flow and composition, CSV | no, regenerated |
+| [`derived_data/`](derived_data/) | state-0 rows only, swap-corrected flow and composition, CSV | no, regenerated |
 | [`metadata/`](metadata/) | device inventory, state codes, calibration card | yes |
 | `biogas_composition.json` | reference gas-composition spot measurements | yes |
 | `survey.csv` | de-identified household survey, 20 households | yes |
@@ -62,8 +62,8 @@ Removed: GPS fixes (sub-metre precision, 20 distinct dwellings), both phone
 numbers, Kobo record keys (`_id`, `_uuid`, `_index`), the enumerator account,
 and all submission timestamps. Free-text responses are not carried through.
 They were reviewed and contained no personal names, place names or numbers, but
-are excluded on principle. Selection is by whitelist in `prepare_survey.py`, so
-a new column in a future export cannot leak in by default.
+are excluded on principle. Selection was by whitelist (kept private with the
+raw export), so a new column in a future export cannot leak in by default.
 
 **Residual risk is real and not eliminated.** At n = 20, k-anonymity is
 unachievable for any useful quasi-identifier set. Exact `age` alone leaves 13 of
@@ -74,6 +74,6 @@ Ethics approval (ETH Zurich 25 ETHICS-267; NACOSTI/P/25/4181252; SPU/555/2025)
 covers release of anonymized data with written informed consent from every
 household. Re-users must not attempt re-identification.
 
-`prepare_survey.py --age-bands` coarsens age to 10-year bands, which takes
-uniqueness on that variable from 13/20 to 1/20. It is the single highest-value
-further mitigation available and still does not reach k ≥ 5.
+Coarsening age to 10-year bands would take uniqueness on that variable from
+13/20 to 1/20. It is the single highest-value further mitigation available and
+still does not reach k ≥ 5.

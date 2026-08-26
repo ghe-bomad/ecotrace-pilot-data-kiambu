@@ -5,7 +5,7 @@ data/derived_data/*
 
 # Raw household survey export — direct identifiers (GPS, phone numbers, Kobo
 # keys). NEVER commit. data/survey.csv is the de-identified file built from it
-# by src/prepare_survey.py and IS published.
+# and IS published.
 data/survey_raw*.csv
 *_PRIVATE.csv
 

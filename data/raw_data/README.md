@@ -19,7 +19,7 @@ Nominal cadence 60 s; UTC throughout.
 | `timestamp` | UTC | sample time (`timestamp[ms, tz=UTC]`) |
 | `timestamp_ms` | ms | same instant, Unix epoch |
 | `pressure` | mbar | digester head pressure, gauge |
-| `state` | code | device state, see [`../metadata/states.csv`](../metadata/states.csv) |
+| `state` | code | device state, see [`../metadata/states.csv`](../metadata/states.csv); codes 0, 1, 5 and 6 occur |
 | `temp` | °C | sensor-body temperature |
 | `flow` | L/min | firmware flow, **corrupted, see below** |
 | `comp` | mole fraction | firmware composition, **inverted, see below** |
@@ -43,7 +43,8 @@ firmware.
 
 **Do not use `flow` or `comp` at face value, and do not assume `powerC`/`powerF`
 mean what they are called.** Run [`../../src/derive.py`](../../src/derive.py),
-which undoes the swap and recomputes both quantities; method and validation in
+which keeps only state-0 rows, undoes the swap and recomputes both quantities;
+method and validation in
 [`../../docs/field_correction.md`](../../docs/field_correction.md).
 
 ## Schema is not stable across files
