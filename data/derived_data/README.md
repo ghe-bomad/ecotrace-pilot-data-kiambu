@@ -8,7 +8,7 @@ python3 src/derive.py
 ```
 
 That writes `data/derived_data/SN_XXXXX/YYYY-MM-DD.csv`: 2,715 files, 841,742
-rows, about 84 MB, roughly 15 s on a laptop. Keeping them out of the repository
+rows, about 88 MB, roughly 15 s on a laptop. Keeping them out of the repository
 avoids shipping a pure function of the 207 MB of Parquet already tracked here.
 
 ## Only state 0 is derived
@@ -23,9 +23,11 @@ polynomial return plausible-looking but meaningless values (see
 
 A day without a single state-0 row produces no file. Of the 2,828 raw files that
 carry sensor payload, 113 are skipped for that reason, 31 of them on SN_01003 and
-30 on SN_01009, both low-use plants; a further 147 heartbeat-only files on
-SN_01018 are skipped for carrying no sensor payload at all. `derive.py` lists
-every skipped file and the reason.
+30 on SN_01009, both low-use plants. A further 147 files on SN_01018 derive
+nothing for a different reason: 146 are heartbeat-only, carrying no sensor
+payload at all, and one (`2026-02-04`) carries real measurements but lacks the
+`temp` column that both corrections need. `derive.py` reports those two cases
+separately and lists every skipped file with its reason.
 
 The `state` column is kept, always 0, as a record that the filter was applied.
 Downstream code that filters on it is a harmless no-op.
@@ -48,7 +50,7 @@ some files carry an extra `msg` column, some lack `temp`).
 | `powerC` | mW | **COMP**-thermistor power, swap-corrected |
 | `powerF` | mW | **FLOW**-thermistor power, swap-corrected |
 | `flow_corrected` | L/min | flow, King's-law inverse on `powerF` |
-| `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN during flow and outside 16 to 33 °C |
+| `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 16 to 33 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
 Small negative `pressure` values occur (1.5% of rows) and are consistent with
@@ -76,21 +78,32 @@ the firmware's crossed assignment, and the result would be physically wrong but
 entirely plausible-looking, with nothing to signal the error. **Derive from the
 raw Parquet; never feed a derived CSV back through the correction.**
 
-## Why `comp_corrected` is NaN on 61% of rows
+## Why `comp_corrected` is NaN on 65% of rows
 
 Measured over all 841,742 derived rows. Causes are exclusive, first one wins:
 
 | cause | share of rows |
 |---|---|
-| gas was flowing (firmware `flow ≥ 0.5`) | 60.7% |
-| temperature outside 16 to 33 °C | 0.7% |
-| **populated** | **38.6%** |
+| firmware reports flow (`flow ≥ 0.5`) | 60.7% |
+| `flow_corrected ≥ 0.5` L/min | 3.9% |
+| temperature outside 16 to 33 °C | 0.3% |
+| **populated** | **35.1%** |
 
-The flow gate is by design: the katharometer reads composition only in still gas,
-so cooking windows are excluded. The share is high because the device stays in
-state 0 mainly while gas is moving; it sleeps after 30 s without flow, so
+The flow gates are by design: the katharometer reads composition only in still
+gas, so cooking windows are excluded. The share is high because the device stays
+in state 0 mainly while gas is moving; it sleeps after 30 s without flow, so
 state-0 rows are dominated by cooking. Composition is read in the no-flow rows
 that remain, which is the window the Dräger validation used.
+
+**Two gates, not one.** The firmware forces `flow` to exactly 0.0 for 60 s after
+every entry into state 0, regardless of the true value, so its zero means "we
+are in the settling window", not "there is no flow". The second gate catches the
+rows where the household was already cooking when the device woke: without it
+29,370 rows (9.0% of all composition values) carried a composition while the
+recomputed flow said gas was moving at a median 7.1 L/min, including 12,931
+values pinned at exactly 1.000 CH₄. With both gates the published maximum is
+0.792 and nothing reaches the clamp. See
+[`../../docs/field_correction.md`](../../docs/field_correction.md) §3.
 
 ## Validity limits
 
@@ -101,7 +114,8 @@ envelope; both columns are emitted outside them.
 - **Composition.** The conc polynomial was calibrated over `T ∈ [16, 33] °C` and
   `X_CH₄ ∈ [0.3, 0.7]`. Outside the temperature window `comp_corrected` is set to
   NaN; the composition range is *not* clipped. Validated against a Dräger X-am
-  8000 reference analyser at RMSE ≈ 7.3 vol-%, in the no-flow window only.
+  8000 reference analyser at RMSE ≈ 9.6 vol-% (bias −1.6, r 0.20, 14 sensors),
+  in the no-flow window only.
 - **Flow.** The King's-law fit covers `Q ∈ [4, 12] L/min`. Above 12 L/min a
   CFD-pinned extrapolation is used. 7.1% of derived samples and **31% of
   integrated volume** come from above that ceiling, and `powerF` reaches 2.36

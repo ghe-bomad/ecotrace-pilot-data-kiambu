@@ -28,7 +28,7 @@ Nominal cadence 60 s; UTC throughout.
 | `mem_free` | kB | MCU free heap |
 | `rssi_dbm` | dBm | cellular signal strength |
 | `battery_volt` | V | battery terminal voltage |
-| `msg` | text | device log events, 184 files only |
+| `msg` | text | device log events, present in 330 of the 2,975 files |
 
 ## ⚠ The column names assert the wrong physics
 
@@ -54,11 +54,13 @@ There are 16 distinct column sets across the fleet, and every device has between
 varies. Any loader concatenating these must reindex to an explicit column list.
 `derive.py` does, which is why its output schema is uniform.
 
-147 files are housekeeping-only: connectivity and battery heartbeats with no
+146 files are housekeeping-only: connectivity and battery heartbeats with no
 sensor payload at all. All of them belong to `SN_01018`, which returned 157 files
 in total but produced sensor data on only 10 days; treat it as a failed
-deployment rather than a low-use household. `derive.py` reports these as skipped
-rather than dropping them silently.
+deployment rather than a low-use household. One further `SN_01018` file
+(`2026-02-04`) carries real measurements but lacks `temp`, which both corrections
+need, so it derives nothing either. `derive.py` reports both cases as skipped,
+under separate reasons, rather than dropping them silently.
 
 ## Missingness is structural
 

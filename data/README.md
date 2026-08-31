@@ -46,7 +46,7 @@ export is never committed and is not part of this deposit.
 | `age` | int | respondent age, **exact** |
 | `gender_male` | 0/1 | |
 | `household_size` | int | people resident |
-| `n_dairy`, `n_non_dairy`, `n_goats`, `n_sheep` | float | livestock counts |
+| `n_dairy`, `n_non_dairy`, `n_goats`, `n_sheep` | float | livestock counts; `n_non_dairy` is 0 for every household in this cohort |
 | `lsu` | float | feed-equivalent livestock units, `0.70·cattle + 0.10·(goats+sheep)`; pigs and chickens excluded because their manure is not fed to these digesters |
 | `income` | 1 to 5 | monthly household income band, increasing |
 | `affordability` | 1 to 4 | perceived affordability, increasing |
@@ -67,9 +67,10 @@ raw export), so a new column in a future export cannot leak in by default.
 
 **Residual risk is real and not eliminated.** At n = 20, k-anonymity is
 unachievable for any useful quasi-identifier set. Exact `age` alone leaves 13 of
-20 households unique; adding gender, education, occupation and household size
-leaves 18 of 20. The `sensor` column further links each household to six months
-of minute-resolution telemetry, from which daily routine and absence are legible.
+20 households unique, and `age` + `gender_male` + `household_size` — three
+columns published here — leaves **all 20 of 20 unique**. The `sensor` column
+further links each household to six months of minute-resolution telemetry, from
+which daily routine and absence are legible.
 Ethics approval (ETH Zurich 25 ETHICS-267; NACOSTI/P/25/4181252; SPU/555/2025)
 covers release of anonymized data with written informed consent from every
 household. Re-users must not attempt re-identification.

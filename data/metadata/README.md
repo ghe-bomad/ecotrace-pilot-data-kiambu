@@ -72,10 +72,24 @@ exactly 0 (`main.cpp:982`). Verified in the data: of 261,556 sampled firmware
 and 13.2% are 2 or above.
 
 That deadband has a useful consequence. `NO_FLOW_MAX = 0.5` in
-`sensor_correction.py`, which gates `comp_corrected`, has no documented source.
-But since firmware flow can never lie between 0 and 2, *any* threshold in
-(0, 2.0) selects exactly the same rows. The constant is arbitrary within a wide
-equivalence class, and its real meaning is simply "the firmware reports no flow."
+`sensor_correction.py`, the firmware-side gate on `comp_corrected`, has no
+documented source. But since firmware flow can never lie between 0 and 2, *any*
+threshold in (0, 2.0) selects exactly the same rows. The constant is arbitrary
+within a wide equivalence class, and its real meaning is simply "the firmware
+reports no flow."
+
+**But "the firmware reports no flow" is not the same as "no gas is moving", and
+that is why there is a second gate.** The settling window above forces `flow` to
+exactly 0.0 for the first 60 s of every state-0 run, so a firmware zero there
+carries no information about the true flow. In this dataset 45.8% of state-0 rows
+read firmware-zero and **99.9% of them lie inside that window**: past 60 s the
+firmware never reports zero, because the device sleeps after 30 s without flow
+and so only stays awake while gas moves. On about 9% of those rows the household
+was already cooking when the device woke, and the flow thermistor shows it
+(`powerF` around 40 mW against a 23 mW no-flow baseline). `sensor_correction.py`
+therefore also requires `flow_corrected < NO_FLOW_MAX_CORRECTED` — a real L/min
+threshold on the thermal path, where the 0.5 value is *not* arbitrary. A row must
+pass both gates. See [`../../docs/field_correction.md`](../../docs/field_correction.md) §3.
 
 ## `calibration_card.json`
 

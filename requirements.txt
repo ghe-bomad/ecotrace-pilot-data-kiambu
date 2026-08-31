@@ -1,3 +1,6 @@
-numpy
-pandas
-pyarrow
+# Pinned to the versions the released derived data and figures were produced with.
+# Loosen at your own risk: the derivation is arithmetic and stable, but pinning is
+# what makes an archived deposit reproducible years later.
+numpy==2.4.4
+pandas==3.0.2
+pyarrow==24.0.0

@@ -28,9 +28,11 @@ What we do
    * ``comp_corrected`` -- CH4 mole fraction from the deployed conc polynomial
      applied in natural order on the swap-fixed RAW powers (this un-inverts it;
      lab RMSE 0.071). Composition is measured only when there is no flow, so it
-     is populated only in the device no-flow window (firmware flow < 0.5) and is
-     NaN during flow; there it matches the reference analyser (RMSE ~7.3 vol-%,
-     see field_correction.md).
+     is populated only where BOTH flow indicators agree there is none -- the
+     firmware's own flow state AND the recomputed ``flow_corrected`` -- and is
+     NaN during flow; there it matches the reference analyser (see
+     field_correction.md). The firmware gate alone is not sufficient: it forces
+     flow to 0.0 for 60 s after every wake, regardless of the true value.
    * ``flow_corrected`` -- L/min from a King's-law inverse on the flow-thermistor
      RAW power: the lab CTA fit for Q<=12, the CFD-pinned extrapolation for Q>12.
 
@@ -170,12 +172,28 @@ def kings_flow(power_flow_therm):
 _SWAP_PAIRS = [("powerC", "powerF")]
 
 # Composition is only valid in the device's no-flow window: the deployed conc
-# poly recovers the Drager X-am 8000 reference (RMSE ~7.3 vol-%) only when the
-# device reports no flow, and is out of regime during cooking. The device's own
-# flow state (firmware `flow`, low/high) is the validated no-flow indicator --
-# its magnitude is corrupted by the swap but its low/high distinction tracks the
-# regime and adapts per-device. See docs/field_correction.md.
+# poly is out of regime while gas moves past the katharometer cavity. TWO gates
+# are applied, and a row must pass BOTH.
+#
+# 1. The firmware's own flow state (`flow` < NO_FLOW_MAX). Its magnitude is
+#    corrupted by the swap, but its low/high distinction adapts per-device and it
+#    correctly rejects a large population of low-power flowing rows that the
+#    thermal gate alone keeps. Any threshold in (0, 2.0) selects the same rows
+#    (the firmware reports flow below 2 L/min as exactly 0).
+# 2. The recomputed flow (`flow_corrected` < NO_FLOW_MAX_CORRECTED, L/min).
+#    Gate 1 CANNOT stand alone: for STABILIZATION_TIME_MS = 60 s after every
+#    entry into state 0 the firmware forces `flow` to exactly 0.0 regardless of
+#    the true value (main.cpp:979-985), and the device duty-cycles, so that
+#    window follows every wake. Essentially every firmware-zero row in this
+#    dataset sits inside it. On the ~9% of them where the user was already
+#    cooking when the device woke, the flow thermistor is plainly cooled
+#    (powerF ~40 mW against a ~23 mW no-flow baseline) and the conc poly is
+#    extrapolated far out of regime, returning up to a clamped 1.0 CH4.
+#    Gating on the thermal path as well removes those rows.
+#
+# See docs/field_correction.md and data/metadata/README.md.
 NO_FLOW_MAX = 0.5
+NO_FLOW_MAX_CORRECTED = 0.5
 
 # The deployed conc polynomial was calibrated over the lab temperature envelope
 # (calibration_card.json -> lab_cal_envelope.T_C). Its T^2 term (-0.0158) makes
@@ -231,19 +249,31 @@ def add_corrected_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     if not bool(df.get("swap_corrected", pd.Series([False])).all()):
         raise ValueError("add_corrected_columns requires apply_swap_fix first")
+    if "flow" not in df.columns:
+        raise ValueError(
+            "add_corrected_columns requires the firmware 'flow' column: it is one "
+            "of the two no-flow gates on comp_corrected (see NO_FLOW_MAX). Without "
+            "it the frame would silently get composition on flowing rows."
+        )
     df = df.copy()
     pf = df["powerF"]              # FLOW thermistor power (raw, swap-fixed)
     pc = df["powerC"]              # COMP thermistor power (raw, swap-fixed)
     t = df["temp"]
+    flow_corrected = np.asarray(kings_flow(pf.to_numpy()), dtype=float)
     comp = np.asarray(composition(pf.to_numpy(), pc.to_numpy(), t.to_numpy()), dtype=float)
-    # composition only where there is no flow (see NO_FLOW_MAX); NaN during flow
-    if "flow" in df.columns:
-        flowing = ~(df["flow"].to_numpy() < NO_FLOW_MAX)   # NaN flow -> treated as flowing
-        comp = np.where(flowing, np.nan, comp)
+
+    # Composition only where BOTH flow indicators agree there is no flow. NaN in
+    # either indicator counts as flowing, so an unknown regime never yields a
+    # composition. See the NO_FLOW_MAX comment for why one gate is not enough.
+    flowing = ~(df["flow"].to_numpy() < NO_FLOW_MAX)
+    flowing |= ~(flow_corrected < NO_FLOW_MAX_CORRECTED)
+    comp = np.where(flowing, np.nan, comp)
+
     # ...and only within the lab T-calibration window (see TEMP_VALID)
     tv = t.to_numpy()
     out_of_T = ~((tv >= TEMP_VALID[0]) & (tv <= TEMP_VALID[1]))  # NaN temp -> out
     comp = np.where(out_of_T, np.nan, comp)
+
     df["comp_corrected"] = comp
-    df["flow_corrected"] = kings_flow(pf.to_numpy())
+    df["flow_corrected"] = flow_corrected
     return df

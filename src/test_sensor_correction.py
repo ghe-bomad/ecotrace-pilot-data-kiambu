@@ -10,8 +10,9 @@ check documented in docs/field_correction.md:
   - deployed conc poly on the swap-fixed columns recovers CH4 ~ 0.50 mole-fraction
     (Drager X-am 8000 reference for SN_01001 is ~0.497); the firmware-corrupted
     `comp` column reads ~0.20 (inverted).
-  - composition is only valid in the device no-flow window; comp_corrected is NaN
-    where the device reports flow (firmware flow >= 0.5).
+  - composition is only valid in the no-flow window; comp_corrected is NaN
+    unless BOTH flow indicators agree there is no flow -- the firmware's own
+    `flow` state AND the recomputed `flow_corrected`.
 """
 from __future__ import annotations
 
@@ -124,7 +125,7 @@ def _toy_df():
         "temp": [25.0, 26.0],
         "flow": [11.0, 0.0],          # firmware (corrupted) flow
         "comp": [0.2, 0.2],           # firmware (inverted) comp
-        "powerC": [38.0, 27.0],       # device: FLOW thermistor
+        "powerC": [38.0, 25.0],       # device: FLOW thermistor
         "powerF": [24.0, 26.0],       # device: COMP thermistor
     })
 
@@ -180,6 +181,36 @@ def test_composition_only_computed_in_no_flow_window():
     assert df["flow_corrected"].notna().all()
 
 
+def test_composition_gated_on_corrected_flow_too():
+    """The firmware gate alone is not enough. For 60 s after every entry into
+    state 0 the firmware forces `flow` to exactly 0.0 regardless of the true
+    value (main.cpp:979-985), so a row can read firmware-zero while the flow
+    thermistor is plainly cooled by gas. The conc poly is far out of regime
+    there -- it returns a clamped 1.0 -- so the recomputed flow gates it too."""
+    df = pd.DataFrame({
+        "timestamp": pd.to_datetime(["2026-02-01T00:00Z"] * 2),
+        "state": [0.0, 0.0], "temp": [25.0, 25.0],
+        "flow": [0.0, 0.0],               # firmware says no flow on BOTH rows
+        "comp": [0.2, 0.2],
+        "powerC": [40.0, 25.0],           # device FLOW thermistor: cooled vs baseline
+        "powerF": [26.0, 26.0],
+    })
+    out = sc.add_corrected_columns(sc.apply_swap_fix(df))
+    assert out["flow_corrected"].iloc[0] >= sc.NO_FLOW_MAX_CORRECTED
+    assert out["flow_corrected"].iloc[1] < sc.NO_FLOW_MAX_CORRECTED
+    # gas was moving on row 0 despite the firmware zero -> no composition
+    assert pd.isna(out["comp_corrected"].iloc[0])
+    assert not pd.isna(out["comp_corrected"].iloc[1])
+
+
+def test_add_corrected_columns_requires_firmware_flow():
+    """`flow` is a gate, not an optional passenger: dropping it must not
+    silently widen the no-flow window to every row."""
+    slim = sc.apply_swap_fix(_toy_df()).drop(columns=["flow"])
+    with pytest.raises(ValueError, match="flow"):
+        sc.add_corrected_columns(slim)
+
+
 def test_composition_restricted_to_valid_temperature_window():
     """comp_corrected is NaN outside the lab T-calibration window (TEMP_VALID),
     even at no-flow: the conc poly's T-extrapolation there is an artefact (an
@@ -188,7 +219,7 @@ def test_composition_restricted_to_valid_temperature_window():
         "timestamp": pd.to_datetime(["2026-02-01T00:00Z"] * 3),
         "state": [0.0, 0.0, 0.0], "temp": [25.0, 40.0, 10.0],
         "flow": [0.0, 0.0, 0.0], "comp": [0.2, 0.2, 0.2],
-        "powerC": [27.0, 27.0, 27.0], "powerF": [24.0, 24.0, 24.0],
+        "powerC": [25.0, 25.0, 25.0], "powerF": [24.0, 24.0, 24.0],
     })
     out = sc.add_corrected_columns(sc.apply_swap_fix(df))
     lo, hi = sc.TEMP_VALID
@@ -218,11 +249,27 @@ def test_real_sn01001_composition_unwinds_inversion():
     df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
     df = sc.add_corrected_columns(sc.apply_swap_fix(df))
     m = df[(df.state == 0)].dropna(subset=["comp_corrected"])
-    postflow = m[m.flow < 0.5]            # low-flow window ~ composition regime
-    med = postflow["comp_corrected"].median()
-    assert 0.40 <= med <= 0.58, med       # biogas band, near GT 0.497
+    med = m["comp_corrected"].median()
+    assert 0.30 <= med <= 0.58, med       # biogas band, near GT 0.497
     # the firmware comp column is inverted/wrong (~0.20); we must be clearly above it
     assert med > m["comp"].mean() + 0.1
+
+
+@pytest.mark.skipif(not (RAW / "SN_01001").is_dir(), reason="field data not mounted")
+def test_real_composition_never_published_while_gas_flows():
+    """The published invariant, on real field data: no composition survives on a
+    row whose recomputed flow says gas is moving. Before both gates were applied
+    9% of all published composition values violated this, and every physically
+    impossible value in the dataset (a clamped 1.0 CH4) lived among them."""
+    fs = sorted(glob.glob(str(RAW / "SN_01001" / "*.parquet")))
+    df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
+    df = sc.add_corrected_columns(sc.apply_swap_fix(df[df["state"] == 0]))
+    published = df.dropna(subset=["comp_corrected"])
+    assert len(published) > 1000, "expected a substantial composition population"
+    assert (published["flow_corrected"] < sc.NO_FLOW_MAX_CORRECTED).all()
+    # the clamp ceiling is unreachable for real biogas; hitting it means the poly
+    # was extrapolated out of regime
+    assert published["comp_corrected"].max() < 1.0
 
 
 # --------------------------------------------------------------------------

@@ -12,7 +12,7 @@ Analysis and figure code for the papers lives in separate repositories; see the
 
 ```bash
 pip install -r ../requirements.txt
-python3 derive.py                 # ~15 s -> data/derived_data/, 2715 files
+python3 derive.py                 # ~15 s -> data/derived_data/, 2715 files, 88 MB
 python3 -m pytest test_sensor_correction.py
 ```
 
@@ -28,7 +28,10 @@ over-the-air update path existed, so this is corrected in post-processing.
   thermistor and `powerC` the comp thermistor, and sets `swap_corrected`.
 - `add_corrected_columns(df)` adds `comp_corrected` (CH₄ mole fraction, from
   the deployed conc polynomial) and `flow_corrected` (L/min, King's-law inverse
-  on the flow-thermistor power).
+  on the flow-thermistor power). `comp_corrected` is gated on **both** flow
+  indicators, the firmware's `flow` and the recomputed `flow_corrected`: the
+  firmware zeroes its own column for 60 s after every wake, so it cannot gate
+  alone. See [`../docs/field_correction.md`](../docs/field_correction.md) §3.
 - `composition()` and `kings_flow()` are the pure functions, scalar- and
   array-friendly, usable independently of pandas.
 
@@ -59,8 +62,10 @@ provenance.
 
 ## Testing
 
-22 tests: the polynomial and King's-law formulas against their documented forms,
-the swap fix and its guard (including on the reduced published schema), the
-validity masks on `comp_corrected`, the state filter and fixed output schema of
-`derive.py`, and an integration check against real field data. `test_deployed_flow_polynomial_is_gone` asserts the removed polynomial
-stays removed.
+25 tests: the polynomial and King's-law formulas against their documented forms,
+the swap fix and its guard (including on the reduced published schema), both
+validity gates on `comp_corrected`, the state filter and fixed output schema of
+`derive.py`, and integration checks against real field data.
+`test_deployed_flow_polynomial_is_gone` asserts the removed polynomial stays
+removed, and `test_real_composition_never_published_while_gas_flows` asserts the
+published no-composition-during-flow invariant on real data.

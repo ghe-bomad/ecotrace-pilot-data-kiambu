@@ -57,7 +57,9 @@ OUTPUT_COLUMNS = [
 ]
 
 # Columns that must be present in the raw file for the correction to be defined.
-REQUIRED_RAW = ("state", "powerC", "powerF", "temp")
+# `flow` is required because it is one of the two no-flow gates on
+# comp_corrected (see sensor_correction.NO_FLOW_MAX).
+REQUIRED_RAW = ("state", "powerC", "powerF", "temp", "flow")
 
 
 def convert_file(parquet_file: Path, csv_file: Path) -> str:
@@ -70,9 +72,14 @@ def convert_file(parquet_file: Path, csv_file: Path) -> str:
         return "empty"
     missing = [c for c in REQUIRED_RAW if c not in df.columns]
     if missing:
-        # Housekeeping-only files (connectivity/battery heartbeats carrying no
-        # sensor payload) legitimately lack these. Reported, never silently dropped.
-        return f"no-sensor-data (missing {','.join(missing)})"
+        # Two distinct cases, reported apart so a partial file is not filed as a
+        # heartbeat one. Housekeeping-only files (connectivity/battery heartbeats
+        # carrying no sensor payload) lack every sensor column and legitimately
+        # derive nothing. A file missing only some of them carries real
+        # measurements that cannot be corrected -- rarer, and worth naming.
+        # Reported either way, never silently dropped.
+        kind = "no-sensor-data" if len(missing) == len(REQUIRED_RAW) else "incomplete-schema"
+        return f"{kind} (missing {','.join(missing)})"
 
     df = df[df["state"] == KEEP_STATE]
     if df.empty:
@@ -118,7 +125,12 @@ def main() -> int:
         # payload at all) is not confused with an idle day (never in state 0).
         by_reason: dict[str, dict[str, int]] = {}
         for path, status in skipped:
-            reason = "no sensor payload" if status.startswith("no-sensor") else "no state-0 rows"
+            if status.startswith("no-sensor"):
+                reason = "no sensor payload"
+            elif status.startswith("incomplete-schema"):
+                reason = "incomplete sensor schema"
+            else:
+                reason = "no state-0 rows"
             dev = by_reason.setdefault(reason, {})
             dev[path.parent.name] = dev.get(path.parent.name, 0) + 1
         for reason, devs in sorted(by_reason.items()):
