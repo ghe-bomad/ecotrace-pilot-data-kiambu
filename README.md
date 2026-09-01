@@ -1,5 +1,8 @@
 # ecoTrace biogas-sensor pilot, Kiambu County, Kenya
 
+[![DOI 10.5281/zenodo.22232789](badges/doi.svg)](https://doi.org/10.5281/zenodo.22232789)
+[![Licence CC BY 4.0](badges/license.svg)](LICENSE)
+
 Sensor telemetry, reference measurements and de-identified household survey from
 a household-biogas monitoring pilot on the ABPL digester fleet in Kiambu County,
 Kenya, together with the code that derives corrected flow and gas composition
@@ -31,6 +34,7 @@ data/
   survey.csv                         de-identified household survey (n = 20)
 docs/field_correction.md             the correction method and its limits
 src/                                 derivation code and tests
+badges/                              README badges, committed rather than fetched
 ```
 
 Every directory has its own README describing its contents, units and limits.
