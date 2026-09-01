@@ -48,8 +48,8 @@ possible, so the fix is applied in post-processing.
 and recomputes:
 
 - **`comp_corrected`**, CH₄ mole fraction, from the deployed composition
-  polynomial. Valid only in the no-flow window and 16 to 33 °C; NaN elsewhere.
-  Validated against a Dräger X-am 8000 reference analyser, RMSE ≈ 9.6 vol-%.
+  polynomial. Valid only in the no-flow window and 17.5 to 30 °C; NaN elsewhere.
+  Validated against a Dräger X-am 8000 reference analyser, RMSE ≈ 8.5 vol-%.
 - **`flow_corrected`**, L/min, from a King's-law inverse on the flow-thermistor
   power.
 
@@ -79,7 +79,7 @@ dataset:
 
 Within state 0, `comp_corrected` is additionally NaN unless *both* flow
 indicators agree there is no flow — the firmware's own `flow` state and the
-recomputed `flow_corrected` — and outside 16 to 33 °C. Two gates are needed
+recomputed `flow_corrected` — and outside 17.5 to 30 °C. Two gates are needed
 because the firmware forces its `flow` column to zero for 60 s after every wake
 regardless of the true value, so its zero alone does not mean the gas is still;
 see [`data/derived_data/README.md`](data/derived_data/README.md) and
@@ -93,10 +93,7 @@ do to the thermistors.
 
 No reference flow meter was installed in the field, so absolute accuracy is **not
 established per household**. Treat cohort-level and temporal results as sound;
-treat single-household absolute volumes as uncertain. A worst-case CFD
-installation study also puts a one-sided **−7 % to −12 % under-read** on the
-reading from installation geometry alone, which is not corrected for; see
-[`docs/field_correction.md`](docs/field_correction.md) §5.
+treat single-household absolute volumes as uncertain.
 
 It has been cross-validated at cohort level against an independent
 pressure-drawdown volume estimate (`ΔV = C·Δp` from dome compliance, which shares

@@ -1,12 +1,13 @@
 # Field-data correction: firmware powerF/powerC swap + recomputed flow & composition
 
-*Method note, first written 2026-06-23 and revised for this release. Inputs
-from the CFD calibration card (revision 2026-06-27), vendored in this repository
-at [`data/metadata/calibration_card.json`](../data/metadata/calibration_card.json);
-its companion notes `deployed_vs_kingslaw.md`, `cfd_field_gap_diagnosis.md` and
-`cfd_calibration_plane.md` are part of the sensor-calibration analysis in the
-technical paper's code — see the dataset README's
-[Related work](../README.md#related-work).*
+*Method note, first written 2026-06-23 and revised for this release. The
+calibration constants it applies are vendored at
+[`data/metadata/calibration_card.json`](../data/metadata/calibration_card.json).
+How those constants were established, and the simulation work behind them, is
+the subject of the technical paper — see the dataset README's
+[Related work](../README.md#related-work). This note documents what the
+correction does to this dataset, not why the calibration takes the form it
+does.*
 
 ## 1. The problem
 
@@ -66,19 +67,22 @@ detrending is applied first (it would double-correct for T).
   flow indicators agree there is no flow, and is `NaN` otherwise** —
   the firmware's own `flow` < 0.5 (`NO_FLOW_MAX`) **and** the recomputed
   `flow_corrected` < 0.5 L/min (`NO_FLOW_MAX_CORRECTED`). §3 explains why one
-  gate is not enough. It is **also restricted to the lab temperature
-  window 16–33 °C** (`TEMP_VALID`) and is `NaN` outside it: the conc poly's T²
-  term makes `comp_corrected` an inverse parabola in temperature (peak ~24 °C,
-  collapsing toward 0 below ~18 °C / above ~30 °C) — a polynomial-extrapolation
-  artefact, not composition physics (§5).
+  gate is not enough. It is **also restricted to 17.5–30 °C** (`TEMP_VALID`) and
+  is `NaN` outside it. That window is the conc polynomial's own positive range,
+  not the lab fit envelope: its T² term makes `comp_corrected` an inverse
+  parabola in temperature, and at representative no-flow powers the polynomial
+  **crosses zero at 17.32 °C and 30.19 °C**, so outside those roots it can only
+  return a clamped 0.0 (§5). Run `python3 src/derive.py --temp-window-scan` to
+  reprint the roots from the coefficients.
 - **`flow_corrected`** — L/min from the King's-law inverse on the flow-thermistor
   raw power `P=powerF`:
   - `Q ≤ 12` (P ≤ 45.48 mW): lab CTA fit `Q = ((P − 22.39) / 6.665)²`.
-  - `Q > 12` (past the lab cal max): the **CFD-pinned** extrapolation —
-    keep the CFD exponent `n = 0.5733` and refit `(a, b)` to the lab anchors
-    (Q = 4, 8, 12), giving `a = 24.62, b = 5.028`. This reproduces the card's
-    validation (P(Q=45) = 69.2 mW vs the card's 69.1). The two branches meet to
-    within ~0.04 L/min at the handover (negligible).
+  - `Q > 12` (past the lab cal max): the **pinned** extrapolation — hold the
+    exponent at `n = 0.5733` (`calibration_card.json` ->
+    `flow_calibration.cfd_kings_law_gas_scale.n`) and refit `(a, b)` to the lab
+    anchors at Q = 4, 8, 12, giving `a = 24.62, b = 5.028`. This reproduces the
+    card's validation value P(Q=45) = 69.2 mW against its stated 69.1. The two
+    branches meet to within ~0.04 L/min at the handover (negligible).
 
 The deployed 10-term **flow** polynomial is not used. It has no zero (about
 11 L/min at 25 °C with both thermistor powers at exactly 0) and it reproduces
@@ -117,20 +121,21 @@ swap); they remain in the raw Parquet.
 ## 3. Validation & the composition window
 
 - **Composition:** the per-sensor median `comp_corrected` in the **no-flow
-  window** vs Dräger X-am 8000 reference CH₄ gives **RMSE 9.6 vol-% (≈0.096),
-  bias −1.6 vol-%, r = 0.20** across the 14 sensors that have both a usable
+  window** vs Dräger X-am 8000 reference CH₄ gives **RMSE 8.5 vol-% (≈0.085),
+  bias −0.5 vol-%, r = 0.17** across the 14 sensors that have both a usable
   reference measurement and at least 50 composition rows (18 units survive the
   papers' exclusions; four of those have no reference reading taken before H₂S
   removal). The r is small because the GT spans only 50–59 vol-%. The firmware
   `comp` column was ~0.0–0.27 (inverted).
 
   *This supersedes an earlier RMSE of 7.3 vol-%, bias +0.1, quoted against a
-  mis-stated sensor count of 18.* Under the identical pipeline the single-gate
-  selector described below scored RMSE 8.0, bias −0.03, r 0.14; adding the
-  second gate moves it to 9.6 / −1.6 / 0.20. The medians barely move (0.572 →
-  0.560 pooled) — what changes is that a contaminated high-CH₄ tail which had
-  been offsetting a small negative bias is gone. The corrected figure is the
-  worse-looking one and the honest one.
+  mis-stated sensor count of 18.* Two changes account for the move. Adding the
+  second flow gate took the single-gate 8.0 / −0.03 / 0.14 to 9.6 / −1.6 / 0.20,
+  by removing a contaminated high-CH₄ tail that had been offsetting a negative
+  bias in the medians. Narrowing the temperature window to the polynomial's
+  positive range then took it to **8.5 / −0.5 / 0.17**, by removing rows that
+  could only ever clamp to zero. Values pinned at exactly 0.0 fell from 5.0% of
+  the published population to 2.2%, and none reach the ceiling.
 
 - **The regime selector needs BOTH flow indicators.** `comp_corrected` only
   recovers GT in the device's no-flow/composition regime, and identifying that
@@ -195,18 +200,13 @@ swap); they remain in the raw Parquet.
 - **No field flow ground truth.** There is no tipping-bucket / reference flow in
   the telemetry, so the **absolute** flow scale cannot be pinned. This is the
   single largest open item.
-- **Installation geometry biases the flow reading low, one-sided.** A worst-case
-  CFD installation study (angled elbow pair, in-plane and out-of-plane routing)
-  puts the shift at **−7 % in the cooking regime (Q14) to −12 % at Q45, always an
-  under-read**, roughly independent of routing and **not** recovered by the flow
-  conditioner. The mechanism is a velocity-deficient asymmetric profile at the
-  CTA bead, not residual swirl. This is a real, one-sided, second-order
-  contributor to per-plant scatter that stacks with the field-vs-lab power
-  deficit below; it is *not* large enough to explain the extremes. Every field
-  unit has some installation geometry, so treat `flow_corrected` as carrying an
-  unremoved low bias of this order. The study is part of the technical paper's
-  CFD analysis (`cfd/analysis/installation_study/`); it is quoted here because it
-  bounds a limitation of this dataset's flow column.
+- **Below about 3 L/min, `flow_corrected` indicates flow but does not measure it.**
+  At those rates the thermistor's heat loss is no longer dominated by the gas
+  stream, and the lab calibration has no anchor there — its lowest point is
+  4 L/min. Treat a reading below ~3 L/min as "gas is moving", not as a rate.
+  Integrated daily volumes are not materially affected, because nearly all gas
+  moves well above that boundary; this is a limit on instantaneous readings. The
+  derivation of the boundary belongs to the technical paper.
 - **Flow-thermistor device-vs-lab power deficit (≈5.7 mW).** On cooking rows the
   field flow-thermistor power averages **34.9 mW** vs the lab CTA reference
   **40.6 mW** (Q 4–12). King's law, pinned to the lab absolute, therefore
@@ -224,9 +224,12 @@ swap); they remain in the raw Parquet.
   (peak ~24 °C), reproduced by evaluating the poly at fixed powers — i.e. it is
   the polynomial's T-extrapolation, not a real composition↔temperature effect.
   Below ~18 °C and above ~30 °C the estimate collapses toward 0. `comp_corrected`
-  is therefore restricted to the lab T-calibration window (16–33 °C, `TEMP_VALID`)
-  and is most reliable in its ~20–28 °C core. (Restricting the window leaves the
-  validation essentially unchanged: RMSE 7.3 → 7.26 vol-%.)
+  is therefore restricted to the polynomial's positive range (17.5–30 °C,
+  `TEMP_VALID`) and is most reliable in its ~20–28 °C core. The lab fit envelope
+  is wider (16–33 °C) and was used in earlier revisions; roughly three degrees at
+  the top of it and one at the bottom lie past the polynomial's zero crossings and
+  could only produce clamped zeros. Narrowing to the valid range improved the
+  validation from RMSE 9.6 to 8.5 vol-%.
 - **A single-thermistor composition calibration does not work.** A linear fit
   of median no-flow comp-thermistor power to reference CH₄, with the failed
   unit 01018 excluded, has r ≈ 0 — its apparent correlation was driven by that
@@ -240,31 +243,4 @@ swap); they remain in the raw Parquet.
   out (single calibration for the fleet).
 - `temp` is the gas/sensor temperature in °C (confirmed: field range ~13–37 °C),
   the unit the deployed poly expects.
-- The CFD-pinned exponent (n=0.5733) is the gas-scale King's-law fit; it governs
-  only the *shape* past Q=12, with `(a,b)` re-anchored to the lab device-scale
-  data.
 
-## 7. Not modelled
-
-- The CFD↔device **absolute** power gap is **not** added back: we pin the
-  absolute level and T-dependence to lab/device data rather than feeding raw CFD
-  absolute powers into the deployed poly (which fails). The updated card models
-  this gap as **one ~13 mW bead-hardware offset** (radiation + lead conduction at
-  the pinned bead T = T_gas+20; ε=0.9 fixed, A=2.83e-5 m², G=0.393 mW/K,
-  T_ref=293 K; reproduces the device to ±1.8 mW and is channel-independent), and
-  offers a `device_matched_plane` (= CFD_gas + offset). The card states the
-  device-matched and pin-to-lab routes are **equivalent**; this correction takes
-  the pin-to-lab route (deployed poly + lab King's law on device powers), so the
-  CFD absolute is used only for shape/extrapolation, never added in.
-  Note this CFD↔device gap (~13 mW) is distinct from the **field-vs-lab**
-  flow-thermistor deficit (~5.7 mW, §5), which the card does not address.
-- The +7.9 % postflow buoyancy correction on the absolute composition power
-  (`cfd_calibration_plane.md`) is not applied — `comp_corrected` is pinned to the
-  device/lab katharometer via the deployed poly, and the GT validation already
-  bounds the composition error (RMSE ~0.07).
-- Humidity/condensation effects on either thermistor. The wet sub-study bounds
-  rather than removes them: droplets >= 50 um gravity-settle to the pipe wall and
-  never reach the beads, and at realistic airborne mist loading (LWC
-  0.05-5 g/m3) the wet-bulb effect on `power_flow` is **+0.5 to +4 %,
-  common-mode**, with composition essentially untouched (+0.15 %). Small, and
-  not corrected for. (`cfd/analysis/wet_substudy/`.)

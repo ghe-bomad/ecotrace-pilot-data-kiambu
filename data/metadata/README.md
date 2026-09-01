@@ -94,32 +94,40 @@ pass both gates. See [`../../docs/field_correction.md`](../../docs/field_correct
 ## `calibration_card.json`
 
 The calibration constants used by
-[`../../src/sensor_correction.py`](../../src/sensor_correction.py), vendored
-from the CFD and lab calibration work so this repository is self-contained.
-Identical to its source except for the `meta.source_repo` field, which was
-rewritten to describe the sensor paper's repository instead of a local path.
+[`../../src/sensor_correction.py`](../../src/sensor_correction.py), vendored from
+the calibration work so this repository is self-contained. Identical to its
+source except for the `meta.source_repo` field, which was rewritten to describe
+the sensor paper's repository instead of a local path.
 
-Contains the deployed 10-term polynomials, the lab and CFD King's-law fits, the
-lab calibration envelope, and composition-calibration parameters. The correction
-code transcribes constants from it rather than reading it at runtime, so the file
-is provenance rather than a live input, but the transcription is verified exact
-for every coefficient.
+Contains the deployed 10-term polynomials, the King's-law fits, the lab
+calibration envelope, and composition-calibration parameters. The correction code
+transcribes constants from it rather than reading it at runtime, so the file is
+provenance rather than a live input, but the transcription is verified exact for
+every coefficient. The card carries more fields than this dataset uses — how the
+constants were established is the technical paper's subject, not this
+repository's.
 
 Two things the card records that the code does **not** enforce, and re-users
 should know:
 
 - `lab_cal_envelope` is `Q ∈ [4, 12] L/min`, `T ∈ [16, 33] °C`,
-  `X_CH₄ ∈ [0.3, 0.7]`. Only the temperature bound is applied (to
-  `comp_corrected`); flow and composition are emitted outside the rest.
+  `X_CH₄ ∈ [0.3, 0.7]`. These are the ranges the calibration was **fitted** over,
+  which is not the same as the ranges over which it returns a physical answer:
+  the conc polynomial is negative outside 17.32–30.19 °C, so `TEMP_VALID` in
+  `sensor_correction.py` is the narrower 17.5–30 °C rather than the envelope
+  bound. Flow and composition are emitted outside the other two.
 - The `deployed_polynomial.flow` entry is deliberately **not** used. It is
   unphysical, having no zero and returning about 11 L/min at 25 °C with both
   powers at 0, and it reproduces the firmware's own corrupted `flow` at
   r ≈ +0.97. Flow comes from the King's-law inverse instead. The `conc` entry
   **is** used and is the only path to `comp_corrected`.
 
-Two limitations of the card's own numbers are worth stating plainly. The
-King's-law exponent `n = 0.5` was assumed rather than fitted. And the reported
+One limitation of the card's own numbers is worth stating plainly: the reported
 R² = 0.9992 is two parameters against three group means; against the 540
-underlying raw bench rows it is R² = 0.783, RMSE 2.10 mW. See
+underlying raw bench rows it is R² = 0.783, RMSE 2.10 mW. (The King's-law
+exponent `n = 0.5` is *not* a limitation — earlier revisions of this file called
+it "assumed rather than fitted", but it is the correct exponent for the sensing
+element's geometry in this Reynolds range. The technical paper carries that
+argument.) See
 [`../derived_data/README.md`](../derived_data/README.md) for what the resulting
 flow column can and cannot claim.

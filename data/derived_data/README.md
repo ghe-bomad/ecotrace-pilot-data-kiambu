@@ -50,7 +50,7 @@ some files carry an extra `msg` column, some lack `temp`).
 | `powerC` | mW | **COMP**-thermistor power, swap-corrected |
 | `powerF` | mW | **FLOW**-thermistor power, swap-corrected |
 | `flow_corrected` | L/min | flow, King's-law inverse on `powerF` |
-| `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 16 to 33 °C |
+| `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 17.5 to 30 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
 Small negative `pressure` values occur (1.5% of rows) and are consistent with
@@ -78,7 +78,7 @@ the firmware's crossed assignment, and the result would be physically wrong but
 entirely plausible-looking, with nothing to signal the error. **Derive from the
 raw Parquet; never feed a derived CSV back through the correction.**
 
-## Why `comp_corrected` is NaN on 65% of rows
+## Why `comp_corrected` is NaN on 66% of rows
 
 Measured over all 841,742 derived rows. Causes are exclusive, first one wins:
 
@@ -86,8 +86,8 @@ Measured over all 841,742 derived rows. Causes are exclusive, first one wins:
 |---|---|
 | firmware reports flow (`flow ≥ 0.5`) | 60.7% |
 | `flow_corrected ≥ 0.5` L/min | 3.9% |
-| temperature outside 16 to 33 °C | 0.3% |
-| **populated** | **35.1%** |
+| temperature outside 17.5 to 30 °C | 1.9% |
+| **populated** | **33.5%** |
 
 The flow gates are by design: the katharometer reads composition only in still
 gas, so cooking windows are excluded. The share is high because the device stays
@@ -111,13 +111,16 @@ The code enforces the state filter, the no-flow gate and the temperature window.
 It does **not** enforce the flow or composition ranges of the calibration
 envelope; both columns are emitted outside them.
 
-- **Composition.** The conc polynomial was calibrated over `T ∈ [16, 33] °C` and
-  `X_CH₄ ∈ [0.3, 0.7]`. Outside the temperature window `comp_corrected` is set to
-  NaN; the composition range is *not* clipped. Validated against a Dräger X-am
-  8000 reference analyser at RMSE ≈ 9.6 vol-% (bias −1.6, r 0.20, 14 sensors),
-  in the no-flow window only.
+- **Composition.** The conc polynomial was fitted over `T ∈ [16, 33] °C` and
+  `X_CH₄ ∈ [0.3, 0.7]`, but it only returns a positive value between **17.32 and
+  30.19 °C** at representative no-flow powers; `TEMP_VALID` is that narrower
+  range, rounded inward to 17.5–30 °C, and `comp_corrected` is NaN outside it.
+  The composition range is *not* clipped. Validated against a Dräger X-am 8000
+  reference analyser at RMSE ≈ 8.5 vol-% (bias −0.5, r 0.17, 14 sensors), in the
+  no-flow window only. 2.2% of published values sit at the clamp floor of 0.0 and
+  none reach the ceiling.
 - **Flow.** The King's-law fit covers `Q ∈ [4, 12] L/min`. Above 12 L/min a
-  CFD-pinned extrapolation is used. 7.1% of derived samples and **31% of
+  pinned extrapolation is used. 7.1% of derived samples and **31% of
   integrated volume** come from above that ceiling, and `powerF` reaches 2.36
   times the highest calibrated power.
 
@@ -134,6 +137,9 @@ Based on 1,613 matched device-days from 15 plants:
 - summarising **per-plant medians** across the 15 plants: median **1.00**, IQR
   0.71 to 1.15, range 0.42 to 1.83
 - at the level of **individual device-days**: median 0.90, IQR 0.57 to 1.33
+- **day-to-day agreement within a plant is moderate, not tight: r ≈ 0.5** on log
+  volumes. The median ratio near 1.00 is a statement about central tendency; it
+  does not mean the two methods track each other closely day by day. Quote both.
 
 Quote the per-plant figure for cohort agreement and the device-day figure for
 what a single household-day is worth; they are different populations and the
@@ -152,10 +158,12 @@ anyone using `flow_corrected` knows what evidence supports it; verify them
 there. `flow_corrected` itself depends on none of it. It is a function of the
 raw Parquet alone.
 
-Two limits on the underlying fit are worth stating plainly. The King's-law
-exponent `n = 0.5` was **assumed, not fitted**. And the advertised R² = 0.9992 is
-two parameters against three group means; on the 540 underlying raw bench rows it
-is R² = 0.783, RMSE 2.10 mW.
+One limit on the underlying fit is worth stating plainly: the advertised
+R² = 0.9992 is two parameters against three group means; on the 540 underlying
+raw bench rows it is R² = 0.783, RMSE 2.10 mW. (Earlier revisions also listed the
+King's-law exponent `n = 0.5` as "assumed, not fitted". It is not a limitation —
+it is the correct exponent for this sensing element's geometry in this Reynolds
+range, and the technical paper carries that argument.)
 
 Treat cohort-level and temporal results as sound; treat single-household absolute
 volumes as uncertain.

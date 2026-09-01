@@ -100,7 +100,20 @@ def main() -> int:
     ap.add_argument("--raw", type=Path, default=BASE_DIR / "data" / "raw_data")
     ap.add_argument("--out", type=Path, default=BASE_DIR / "data" / "derived_data")
     ap.add_argument("--quiet", action="store_true", help="only print the summary")
+    ap.add_argument("--temp-window-scan", action="store_true",
+                    help="print where the conc polynomial crosses zero (the source "
+                         "of sensor_correction.TEMP_VALID) and exit")
     args = ap.parse_args()
+
+    if args.temp_window_scan:
+        lo, hi = sc.temp_window_crossings()
+        pf, pc = sc._TEMP_WINDOW_REF_POWERS
+        print(f"conc polynomial at the cohort median no-flow powers "
+              f"(powerF={pf} mW, powerC={pc} mW):")
+        print(f"  crosses zero at {lo:.2f} C and {hi:.2f} C")
+        print(f"  TEMP_VALID = {sc.TEMP_VALID}  (rounded inward from those roots)")
+        print(f"  lab_cal_envelope.T_C = (16.0, 33.0)  -- the FIT range, wider than the valid range")
+        return 0
 
     written = 0
     skipped: list[tuple[Path, str]] = []

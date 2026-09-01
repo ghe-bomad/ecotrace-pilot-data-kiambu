@@ -34,7 +34,7 @@ What we do
      field_correction.md). The firmware gate alone is not sufficient: it forces
      flow to 0.0 for 60 s after every wake, regardless of the true value.
    * ``flow_corrected`` -- L/min from a King's-law inverse on the flow-thermistor
-     RAW power: the lab CTA fit for Q<=12, the CFD-pinned extrapolation for Q>12.
+     RAW power: the lab CTA fit for Q<=12, the pinned extrapolation for Q>12.
 
 The deployed 10-term FLOW polynomial is deliberately NOT implemented. It is
 unphysical -- it has no zero, returning
@@ -52,11 +52,10 @@ only state-0 rows before calling these, because outside state 0 the thermistor
 powers reflect warm-up or sleep, not gas, and both corrected quantities come out
 plausible-looking but meaningless.
 
-All constants below are transcribed from the CFD calibration card, vendored into
+All constants below are transcribed from the calibration card, vendored into
 this repository as ``data/metadata/calibration_card.json`` so the derivation is
 reproducible from this repository alone. See ``docs/field_correction.md`` for the
-full method, the limitations, and the device-vs-lab flow-power scale
-reconciliation.
+full method and its limitations.
 
 Units: powers in mW, temperature in deg C, flow in L/min, composition as CH4
 mole fraction [0, 1].
@@ -89,22 +88,23 @@ CONC_POLY_CLAMP = (0.0, 1.0)
 # ---------------------------------------------------------------------------
 LAB_KINGS = {"a": 22.39, "b": 6.665, "n": 0.5}
 
-# CFD King's-law exponent (gas-scale fit, R^2 0.989). The pinned extrapolation
-# keeps this exponent and refits (a, b) to the lab anchors at Q = 4, 8, 12 so it
-# is anchored to device-scale data while carrying the CFD-validated shape.
-CFD_KINGS_EXPONENT = 0.5732724102616522
+# Pinned King's-law exponent (calibration_card.json ->
+# flow_calibration.cfd_kings_law_gas_scale.n). The pinned extrapolation keeps this
+# exponent and refits (a, b) to the lab anchors at Q = 4, 8, 12, so the curve is
+# anchored to device-scale data while carrying the calibrated shape past Q = 12.
+PINNED_KINGS_EXPONENT = 0.5732724102616522
 _PINNED_ANCHORS_Q = (4.0, 8.0, 12.0)
 
 
 def _fit_pinned() -> dict:
     """Refit (a, b) of P = a + b*Q^n to the lab King's-law anchors, holding the
-    CFD exponent. Reproduces the card validation (P(Q=45) ~ 69.1 mW)."""
+    pinned exponent. Reproduces the card validation (P(Q=45) ~ 69.1 mW)."""
     q = np.array(_PINNED_ANCHORS_Q)
     p = LAB_KINGS["a"] + LAB_KINGS["b"] * q ** LAB_KINGS["n"]
-    x = q ** CFD_KINGS_EXPONENT
+    x = q ** PINNED_KINGS_EXPONENT
     design = np.vstack([np.ones_like(x), x]).T
     (a, b), *_ = np.linalg.lstsq(design, p, rcond=None)
-    return {"a": float(a), "b": float(b), "n": CFD_KINGS_EXPONENT}
+    return {"a": float(a), "b": float(b), "n": PINNED_KINGS_EXPONENT}
 
 
 PINNED_KINGS = _fit_pinned()
@@ -146,7 +146,7 @@ def kings_flow(power_flow_therm):
     """Flow [L/min] from the King's-law inverse on the FLOW-thermistor power.
 
     Q = ((P - a) / b)^(1/n), using the lab CTA fit for Q <= 12 (P <= 45.48 mW)
-    and the CFD-pinned fit for Q > 12. Powers at/below the King's-law offset a
+    and the pinned fit for Q > 12. Powers at/below the King's-law offset a
     map to zero flow. Result clamped to [0, 100].
 
     The lab and pinned branches meet within ~0.04 L/min at the handover (the
@@ -195,12 +195,45 @@ _SWAP_PAIRS = [("powerC", "powerF")]
 NO_FLOW_MAX = 0.5
 NO_FLOW_MAX_CORRECTED = 0.5
 
-# The deployed conc polynomial was calibrated over the lab temperature envelope
-# (calibration_card.json -> lab_cal_envelope.T_C). Its T^2 term (-0.0158) makes
-# comp_corrected an inverse parabola in temperature (peak ~24 C, collapsing toward
-# 0 below ~18 C / above ~30 C) -- a polynomial-extrapolation artefact, not real
-# composition physics. Restrict comp_corrected to this window; it is NaN outside.
-TEMP_VALID = (16.0, 33.0)
+# Temperature window for comp_corrected.
+#
+# The card's lab_cal_envelope.T_C is [16, 33] C, and earlier revisions used it
+# directly. That is the range the polynomial was FITTED over, not the range over
+# which it returns a physical answer. Its T^2 term (-0.0158) makes comp_corrected
+# an inverse parabola in temperature, and evaluated at the cohort's median no-flow
+# powers the polynomial CROSSES ZERO at about 17.3 C and 30.2 C -- so roughly
+# three degrees at the top of the lab envelope, and one at the bottom, can only
+# ever produce a clamped 0.0. Measured on this dataset, the share of no-flow rows
+# clamping to exactly zero runs 8.7% (26-28 C) -> 35.7% (28-29) -> 78.7% (29-30)
+# -> 95.9% (30-31).
+#
+# The window below is the polynomial's own positive range, rounded inward, not a
+# value tuned against the reference. `python3 src/derive.py --temp-window-scan`
+# reprints the crossing points from the coefficients.
+TEMP_VALID = (17.5, 30.0)
+
+# The powers the crossing points above are evaluated at: the cohort medians of the
+# published no-flow population. Kept so the derivation is reproducible.
+_TEMP_WINDOW_REF_POWERS = (23.31, 26.88)   # (powerF flow-therm, powerC comp-therm), mW
+
+
+def temp_window_crossings(pf: float = None, pc: float = None) -> tuple:
+    """Temperatures at which the conc polynomial crosses zero, at fixed powers.
+
+    This is where TEMP_VALID comes from: outside these two roots the polynomial is
+    negative and ``composition`` can only return the clamp floor.
+    """
+    pf = _TEMP_WINDOW_REF_POWERS[0] if pf is None else pf
+    pc = _TEMP_WINDOW_REF_POWERS[1] if pc is None else pc
+    # v(t) = T2*t^2 + (T + PFT*pf + PCT*pc)*t + (C + PF*pf + PC*pc + PF2*pf^2
+    #        + PFPC*pf*pc + PC2*pc^2)
+    k = CONC_POLY
+    a2 = k["T2"]
+    a1 = k["T"] + k["PFT"] * pf + k["PCT"] * pc
+    a0 = (k["C"] + k["PF"] * pf + k["PC"] * pc + k["PF2"] * pf ** 2
+          + k["PFPC"] * pf * pc + k["PC2"] * pc ** 2)
+    roots = np.sort(np.roots([a2, a1, a0]))
+    return float(roots[0]), float(roots[1])
 
 
 def apply_swap_fix(df: pd.DataFrame) -> pd.DataFrame:

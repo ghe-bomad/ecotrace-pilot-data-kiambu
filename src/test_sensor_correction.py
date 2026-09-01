@@ -1,11 +1,11 @@
 """Tests for the field-data swap correction + recomputed flow/composition.
 
-Validation anchors come from the CFD calibration card, vendored in this
+Validation anchors come from the calibration card, vendored in this
 repository at data/metadata/calibration_card.json, and from the empirical field
 check documented in docs/field_correction.md:
 
   - lab King's law  P = 22.39 + 6.665*Q^0.5   (Q <= 12)
-  - CFD-pinned       keep n=0.5733, refit (a,b) to lab anchors Q=4,8,12; use for Q>12
+  - pinned           keep n=0.5733, refit (a,b) to lab anchors Q=4,8,12; use for Q>12
   - pinned validation: at Q=45, P = 69.1 mW (card)
   - deployed conc poly on the swap-fixed columns recovers CH4 ~ 0.50 mole-fraction
     (Drager X-am 8000 reference for SN_01001 is ~0.497); the firmware-corrupted
@@ -33,14 +33,14 @@ RAW = BASE / "data" / "raw_data"
 # King's law inversion (flow channel)
 # --------------------------------------------------------------------------
 def test_pinned_coefficients_refit_to_lab_anchors():
-    """Pinned curve keeps the CFD exponent and is refit to the lab anchors."""
+    """Pinned curve keeps the pinned exponent and is refit to the lab anchors."""
     assert sc.PINNED_KINGS["n"] == pytest.approx(0.5732724102616522)
     assert sc.PINNED_KINGS["a"] == pytest.approx(24.616, abs=0.05)
     assert sc.PINNED_KINGS["b"] == pytest.approx(5.028, abs=0.05)
 
 
 def test_pinned_forward_matches_card_validation_at_Q45():
-    """Card: CFD-pinned forward law gives 69.1 mW at Q=45."""
+    """Card: the pinned forward law gives 69.1 mW at Q=45."""
     p = sc.PINNED_KINGS["a"] + sc.PINNED_KINGS["b"] * 45.0 ** sc.PINNED_KINGS["n"]
     assert p == pytest.approx(69.1, abs=0.5)
 
@@ -223,10 +223,28 @@ def test_composition_restricted_to_valid_temperature_window():
     })
     out = sc.add_corrected_columns(sc.apply_swap_fix(df))
     lo, hi = sc.TEMP_VALID
-    assert lo == 16.0 and hi == 33.0
+    assert (lo, hi) == (17.5, 30.0)
     assert not pd.isna(out["comp_corrected"].iloc[0])   # 25 C, in window
     assert pd.isna(out["comp_corrected"].iloc[1])        # 40 C, above window
     assert pd.isna(out["comp_corrected"].iloc[2])        # 10 C, below window
+
+
+def test_temp_window_is_the_polynomials_positive_range():
+    """TEMP_VALID is derived, not tuned: it is the conc polynomial's own positive
+    range at representative no-flow powers, rounded inward. The card's
+    lab_cal_envelope (16-33 C) is the range the polynomial was FITTED over, which
+    is about three degrees wider at the top than the range where it can return a
+    physical answer."""
+    lo, hi = sc.temp_window_crossings()
+    assert 17.0 < lo < 17.6, lo
+    assert 30.0 < hi < 30.5, hi
+    # the window sits inside the roots, so the polynomial is positive throughout it
+    assert lo <= sc.TEMP_VALID[0] and sc.TEMP_VALID[1] <= hi
+    for t in (sc.TEMP_VALID[0], 24.0, sc.TEMP_VALID[1]):
+        v = sc._poly10(sc.CONC_POLY, *sc._TEMP_WINDOW_REF_POWERS, t)
+        assert v > 0, (t, v)
+    # and it is strictly inside the lab fit envelope, never wider
+    assert sc.TEMP_VALID[0] >= 16.0 and sc.TEMP_VALID[1] <= 33.0
 
 
 def test_corrected_composition_uses_swapped_raw_powers():
