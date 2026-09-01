@@ -14,7 +14,8 @@ type: dataset
 license: CC-BY-4.0
 version: 1.0.0
 date-released: "2026-09-01"
-# doi: 10.5281/zenodo.XXXXXXX   # add once the Zenodo record is reserved
+doi: 10.5281/zenodo.22232789   # concept DOI: always resolves to the newest version.
+# Cite the version DOI of the release you actually used; see the Zenodo record.
 repository-code: https://github.com/ghe-bomad/ecotrace-pilot-data-kiambu
 keywords:
   - biogas

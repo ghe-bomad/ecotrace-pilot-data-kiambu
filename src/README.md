@@ -8,7 +8,7 @@ Analysis and figure code for the papers lives in separate repositories; see the
 |---|---|
 | `derive.py` | ingest: raw Parquet to derived CSVs; keeps state-0 rows only, then applies the correction |
 | `sensor_correction.py` | the channel-swap fix and the corrected quantities |
-| `test_sensor_correction.py` | unit and integration tests for the correction |
+| `test_sensor_correction.py` | unit and integration tests for the correction, plus the deposit-metadata drift check |
 
 ```bash
 pip install -r ../requirements.txt
@@ -69,3 +69,13 @@ validity gates on `comp_corrected`, the state filter and fixed output schema of
 `test_deployed_flow_polynomial_is_gone` asserts the removed polynomial stays
 removed, and `test_real_composition_never_published_while_gas_flows` asserts the
 published no-composition-during-flow invariant on real data.
+
+One test is not about the correction at all.
+`test_zenodo_json_agrees_with_citation_cff` keeps `.zenodo.json` in step with
+`CITATION.cff`. That file exists only because Zenodo's GitHub integration types
+every release as *software* and ignores `CITATION.cff`'s `type:` field, so a
+dataset deposit needs the override — but when `.zenodo.json` is present Zenodo
+reads it *instead of* `CITATION.cff`, meaning it must repeat the whole author
+list. The test is what stops the two copies diverging. It skips if `pyyaml` is
+not installed, which is why `pyyaml` is not in `requirements.txt`: the
+derivation does not need it.

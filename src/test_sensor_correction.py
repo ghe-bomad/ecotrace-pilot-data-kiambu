@@ -346,3 +346,35 @@ def test_derive_output_columns_exclude_corrupted_and_heap_fields():
         assert col not in derive.OUTPUT_COLUMNS
     for col in ("battery_volt", "rssi_dbm"):
         assert col in derive.OUTPUT_COLUMNS
+
+
+# --------------------------------------------------------------------------
+# Deposit metadata: .zenodo.json must not drift from CITATION.cff
+# --------------------------------------------------------------------------
+def test_zenodo_json_agrees_with_citation_cff():
+    """`.zenodo.json` exists only to tell Zenodo this deposit is a DATASET --
+    the GitHub integration otherwise types every release as software, and it
+    ignores CITATION.cff's `type:` field. But when the file is present Zenodo
+    reads it INSTEAD of CITATION.cff, so it has to carry the full author list
+    too. Two files, one truth: this test is what stops them diverging."""
+    import json
+    yaml = pytest.importorskip("yaml", reason="pyyaml not installed")
+    root = Path(__file__).resolve().parent.parent
+    cff = yaml.safe_load((root / "CITATION.cff").read_text())
+    zen = json.loads((root / ".zenodo.json").read_text())
+
+    assert zen["upload_type"] == "dataset", "the whole point of the file"
+    assert cff["type"] == "dataset", "CITATION.cff must agree even though Zenodo ignores it"
+    assert zen["title"] == cff["title"]
+    assert zen["version"] == cff["version"]
+    assert zen["license"] == cff["license"].lower()
+    assert zen["keywords"] == cff["keywords"]
+    assert " ".join(cff["abstract"].split()) == zen["description"]
+
+    expected = [f'{a["family-names"]}, {a["given-names"]}' for a in cff["authors"]]
+    assert [c["name"] for c in zen["creators"]] == expected, "author list or order drifted"
+    for author, creator in zip(cff["authors"], zen["creators"]):
+        assert creator.get("affiliation") == author.get("affiliation")
+        orcid = author.get("orcid")
+        expect = str(orcid).rsplit("/", 1)[-1] if orcid else None
+        assert creator.get("orcid") == expect, creator["name"]

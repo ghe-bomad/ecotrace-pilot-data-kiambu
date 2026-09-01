@@ -1,0 +1,72 @@
+{
+  "upload_type": "dataset",
+  "title": "ecoTrace biogas-sensor pilot, Kiambu County, Kenya: sensor telemetry, gas composition, household survey and derivation code",
+  "description": "Sensor telemetry, reference gas-composition measurements and a de-identified household survey from a household-biogas monitoring pilot on the ABPL digester fleet in Kiambu County, Kenya (2026-01-27 to 2026-07-19), together with the code that derives corrected gas flow and methane composition from the raw device output. Covers 22 devices, 2,975 device-days and 5,499,810 telemetry rows. The deployed firmware crossed the two thermistor ADC channels, so the raw flow and composition columns are corrupted; the included derivation code undoes the channel swap and recomputes both quantities.",
+  "creators": [
+    {
+      "name": "Tkaczuk, Jakub",
+      "affiliation": "ETH Zurich, Global Health Engineering, Zurich, Switzerland",
+      "orcid": "0000-0001-7997-9423"
+    },
+    {
+      "name": "Weber, Elia",
+      "affiliation": "ETH Zurich, Global Health Engineering, Zurich, Switzerland",
+      "orcid": "0009-0009-0937-8249"
+    },
+    {
+      "name": "Muntwyler, Fiona",
+      "affiliation": "ETH Zurich, Global Health Engineering, Zurich, Switzerland",
+      "orcid": "0009-0008-1598-0001"
+    },
+    {
+      "name": "Ouma, Evance",
+      "affiliation": "Africa Bioenergy Program Ltd (ABPL), Kenya",
+      "orcid": "0009-0000-0480-3749"
+    },
+    {
+      "name": "Boyd-Williams, Natalie",
+      "affiliation": "ETH Zurich, Global Health Engineering, Zurich, Switzerland",
+      "orcid": "0000-0002-7409-2863"
+    },
+    {
+      "name": "Akelo, Jacktone",
+      "affiliation": "School of Education and Social Science, St. Paul's University, Limuru, Kenya",
+      "orcid": "0000-0001-9812-3401"
+    },
+    {
+      "name": "Ngigi, Tabitha",
+      "affiliation": "Africa Bioenergy Program Ltd (ABPL), Kenya"
+    },
+    {
+      "name": "Njeri, Teresiah",
+      "affiliation": "Africa Bioenergy Program Ltd (ABPL), Kenya"
+    },
+    {
+      "name": "Wasonga, Michael",
+      "affiliation": "Africa Bioenergy Program Ltd (ABPL), Kenya"
+    },
+    {
+      "name": "Kinusu, Kevin",
+      "affiliation": "Africa Bioenergy Program Ltd (ABPL), Kenya"
+    },
+    {
+      "name": "Tilley, Elizabeth",
+      "affiliation": "ETH Zurich, Global Health Engineering, Zurich, Switzerland",
+      "orcid": "0000-0002-2095-9724"
+    }
+  ],
+  "license": "cc-by-4.0",
+  "version": "1.0.0",
+  "keywords": [
+    "biogas",
+    "household energy",
+    "anaerobic digestion",
+    "sensor telemetry",
+    "thermal flow sensor",
+    "methane",
+    "Kenya",
+    "Kiambu"
+  ],
+  "access_right": "open",
+  "language": "eng"
+}
