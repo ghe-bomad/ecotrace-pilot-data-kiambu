@@ -135,9 +135,13 @@ re-identification of households or individuals. See
 
 ## Citation
 
-If you use this dataset, please cite it via its DOI (see `CITATION.cff`), and
-cite the version DOI of the specific release you used rather than the concept
-DOI, so your analysis is pinned to the exact data you ran on.
+If you use this dataset, please cite it:
+[10.5281/zenodo.22232789](https://doi.org/10.5281/zenodo.22232789).
+
+That is the **concept DOI**, which always resolves to the newest version. Cite
+the **version DOI** of the specific release you used rather than the concept DOI,
+so your analysis is pinned to the exact data you ran on; each Zenodo record lists
+it.
 
 ## Licence
 
@@ -153,8 +157,10 @@ derived measurements, and is only meaningful alongside it.
 
 This dataset is the empirical basis for other repositories:
 
-- https://github.com/ghe-bomad/ecotrace-pilot-deployment-kiambu
-- technical repository to be published
+- **Installation and feasibility figure code** —
+  [10.5281/zenodo.22233280](https://doi.org/10.5281/zenodo.22233280) ·
+  https://github.com/ghe-bomad/ecotrace-pilot-deployment-kiambu
+- **Technical paper code** (sensor, calibration and CFD) — to be published
 
 Data and analysis are separated deliberately: they carry different licences, have
 different release cycles, and are cited differently. The boundary is that this
