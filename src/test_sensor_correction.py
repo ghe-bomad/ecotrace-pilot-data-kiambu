@@ -320,6 +320,8 @@ def test_derive_emits_only_state_zero_rows(tmp_path):
     assert derive.convert_file(src, dst) == "ok"
     out = pd.read_csv(dst)
     assert list(out.columns) == derive.OUTPUT_COLUMNS
+    assert "flow_zero_cal" in out.columns
+    assert derive.OUTPUT_COLUMNS.index("flow_zero_cal") == derive.OUTPUT_COLUMNS.index("flow_corrected") + 1
     assert len(out) == 1
     assert (out["state"] == 0).all()
     # the warm-up row (state 1) would have read ~7 L/min; it must not survive

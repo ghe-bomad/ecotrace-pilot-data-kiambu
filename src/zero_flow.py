@@ -124,3 +124,49 @@ def zero_shift(temp: np.ndarray, fit: dict, fleet_p0: float,
 def flow_zero_cal(power: np.ndarray, shift: np.ndarray) -> np.ndarray:
     """Flow [L/min] from the King's-law inverse on the zero-shifted power."""
     return np.asarray(sc.kings_flow(np.asarray(power, float) - np.asarray(shift, float)), float)
+
+
+def add_zero_cal(derived_dir: Path, slope: float | None = None) -> pd.DataFrame:
+    """Fit every unit's zero, then fill ``flow_zero_cal`` in its derived CSVs.
+
+    Writes ``zero_flow_table.csv`` (one row per unit, with the fleet zero) and
+    ``zero_flow_weekly.csv`` (the weekly intercepts) into ``derived_dir``.
+    Always recomputed from ``powerF`` and ``temp``, so running it twice gives
+    the same files.
+    """
+    derived_dir = Path(derived_dir)
+    units = {}
+    for d in sorted(derived_dir.glob("SN_*")):
+        files = sorted(d.glob("*.csv"))
+        if files:
+            units[d.name] = files
+
+    fits, weekly = [], {}
+    for sn, files in units.items():
+        df = pd.concat((pd.read_csv(f, usecols=["timestamp", "temp", "powerF", "flow_corrected"])
+                        for f in files), ignore_index=True)
+        noflow = select_no_flow(df)
+        fit = fit_zero(noflow, sn, slope=slope)
+        fits.append(fit)
+        if fit["status"] == "ok":
+            weekly[sn] = fit_weekly_zero(noflow, fit["slope"])
+    table = pd.DataFrame(fits, columns=ZERO_TABLE_COLUMNS)
+    fleet_p0 = float(table.loc[table["status"] == "ok", "p0_ref"].median())
+    table["fleet_p0_ref"] = fleet_p0
+
+    for fit in table.to_dict("records"):
+        wk = weekly.get(fit["sensor"], pd.Series(dtype=float))
+        for f in units[fit["sensor"]]:
+            # round_trip: the default parser can change the last digit of a float,
+            # and every other column must come back exactly as derive wrote it
+            df = pd.read_csv(f, float_precision="round_trip")
+            p0_row = week_key(df["timestamp"]).map(wk).to_numpy(float)
+            shift = zero_shift(df["temp"].to_numpy(float), fit, fleet_p0, p0_row=p0_row)
+            df["flow_zero_cal"] = flow_zero_cal(df["powerF"].to_numpy(float), shift)
+            df.to_csv(f, index=False)
+
+    table.to_csv(derived_dir / "zero_flow_table.csv", index=False)
+    rows = [(sn, week, p0) for sn, s in weekly.items() for week, p0 in s.items()]
+    pd.DataFrame(rows, columns=["sensor", "week", "p0_ref"]).to_csv(
+        derived_dir / "zero_flow_weekly.csv", index=False)
+    return table

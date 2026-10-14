@@ -164,3 +164,77 @@ def test_select_no_flow_ignores_row_order():
     df = _timeline([0, 1, 2, 10, zf.POST_FLOW_EXCLUDE_MIN + 5],
                    [P5, P5, P5, 23.4, 23.4], [5.0, 5.0, 5.0, 0.0, 0.0])
     assert len(zf.select_no_flow(df.iloc[::-1])) == 1
+
+
+# --------------------------------------------------------------------------
+# The zero pass over a derived-data directory
+# --------------------------------------------------------------------------
+def _write_unit(root, sn, p0, n=600, seed=0):
+    rng = np.random.default_rng(seed)
+    d = root / sn
+    d.mkdir(parents=True)
+    ts = pd.Timestamp("2026-03-02", tz="UTC") + pd.to_timedelta(np.arange(n + 3) * 5, unit="min")
+    temp = np.r_[rng.uniform(18, 32, n), [25.0, 25.0, 25.0]]     # cooking rows at T_REF
+    power = np.r_[p0 + 0.1 * (temp[:n] - 25) + rng.normal(0, 0.2, n), [P5, P5, P5]]
+    df = pd.DataFrame({"timestamp": ts, "temp": temp, "powerF": power,
+                       "flow_corrected": sc.kings_flow(power), "flow_zero_cal": np.nan})
+    df.iloc[: n // 2].to_csv(d / "2026-03-02.csv", index=False)
+    df.iloc[n // 2:].to_csv(d / "2026-03-03.csv", index=False)
+
+
+def test_add_zero_cal_end_to_end(tmp_path):
+    _write_unit(tmp_path, "SN_A", 23.0)
+    _write_unit(tmp_path, "SN_B", 24.0, seed=1)
+    _write_unit(tmp_path, "SN_C", 23.5, seed=2)
+    table = zf.add_zero_cal(tmp_path)
+    assert set(table["sensor"]) == {"SN_A", "SN_B", "SN_C"}
+    assert (tmp_path / "zero_flow_table.csv").exists()
+    fleet = table["fleet_p0_ref"].iloc[0]
+    assert fleet == pytest.approx(table["p0_ref"].median())
+    b = pd.concat(pd.read_csv(f) for f in sorted((tmp_path / "SN_B").glob("*.csv")))
+    cooking = b[b["powerF"] == P5]
+    assert (cooking["flow_zero_cal"] < cooking["flow_corrected"]).all()   # high zero reads lower
+    assert b["flow_zero_cal"].notna().all()
+
+
+def test_add_zero_cal_writes_weekly_table(tmp_path):
+    _write_unit(tmp_path, "SN_A", 23.0)
+    zf.add_zero_cal(tmp_path)
+    w = pd.read_csv(tmp_path / "zero_flow_weekly.csv")
+    assert list(w.columns) == ["sensor", "week", "p0_ref"]
+    assert w["sensor"].tolist() == ["SN_A"] and w["week"].tolist() == ["2026-03-02"]
+    assert w["p0_ref"].iloc[0] == pytest.approx(23.0, abs=0.05)
+
+
+def test_add_zero_cal_is_idempotent(tmp_path):
+    _write_unit(tmp_path, "SN_A", 23.0)
+    _write_unit(tmp_path, "SN_B", 24.0, seed=1)
+    zf.add_zero_cal(tmp_path)
+    first = pd.read_csv(tmp_path / "SN_B" / "2026-03-03.csv")
+    zf.add_zero_cal(tmp_path)
+    second = pd.read_csv(tmp_path / "SN_B" / "2026-03-03.csv")
+    pd.testing.assert_frame_equal(first, second)
+
+
+def test_add_zero_cal_leaves_flow_corrected_untouched(tmp_path):
+    _write_unit(tmp_path, "SN_A", 23.0)
+    before = pd.read_csv(tmp_path / "SN_A" / "2026-03-02.csv")["flow_corrected"]
+    zf.add_zero_cal(tmp_path)
+    after = pd.read_csv(tmp_path / "SN_A" / "2026-03-02.csv")["flow_corrected"]
+    pd.testing.assert_series_equal(before, after)
+
+
+def test_add_zero_cal_rewrites_other_columns_byte_identically(tmp_path):
+    """Re-reading and rewriting a derived CSV must not perturb any other column.
+    The default C float parser is not exactly round-trip: 1.9723460497506835e-07
+    came back as ...838e-07 on a real file."""
+    _write_unit(tmp_path, "SN_A", 23.0)
+    f = tmp_path / "SN_A" / "2026-03-02.csv"
+    df = pd.read_csv(f, float_precision="round_trip")
+    df.loc[0, "flow_corrected"] = 1.9723460497506835e-07
+    df.to_csv(f, index=False)
+    before = pd.read_csv(f, dtype=str)
+    zf.add_zero_cal(tmp_path)
+    after = pd.read_csv(f, dtype=str)
+    cols = [c for c in before.columns if c != "flow_zero_cal"]
+    pd.testing.assert_frame_equal(before[cols], after[cols])

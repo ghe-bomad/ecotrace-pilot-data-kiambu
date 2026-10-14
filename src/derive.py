@@ -11,7 +11,9 @@ This is the single central ingest step. Besides the format conversion it
     ``powerC<->powerF`` are swapped so ``powerF`` is the FLOW thermistor and
     ``powerC`` the COMP thermistor, with a ``swap_corrected`` provenance flag;
   * adds ``comp_corrected`` (CH4 mole fraction) and ``flow_corrected`` (L/min,
-    from the King's-law inverse).
+    from the King's-law inverse);
+  * then, over all units, fits each unit's zero-flow power and fills
+    ``flow_zero_cal`` (see ``zero_flow`` and ``docs/field_correction.md`` section 7).
 
 The firmware's own ``flow`` and ``comp`` columns are corrupted by the swap and
 are NOT carried into the output; analysis uses the ``*_corrected`` columns.
@@ -24,7 +26,7 @@ that order. The raw Parquet is not schema-stable (16 distinct column sets across
 the fleet, some files carrying an extra ``msg`` column and some lacking
 ``temp``), so the output columns are explicitly reindexed rather than inherited.
 
-Usage:  python3 src/derive.py [--raw DIR] [--out DIR] [--quiet]
+Usage:  python3 src/derive.py [--raw DIR] [--out DIR] [--quiet] [--zero-slope MW_PER_K]
 """
 import argparse
 import sys
@@ -34,6 +36,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sensor_correction as sc  # noqa: E402
+import zero_flow as zf  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -52,6 +55,7 @@ OUTPUT_COLUMNS = [
     "powerC",           # COMP-thermistor power, mW (swap-corrected)
     "powerF",           # FLOW-thermistor power, mW (swap-corrected)
     "flow_corrected",   # L/min, King's-law inverse on powerF
+    "flow_zero_cal",    # L/min, flow_corrected with a per-unit zero (zero_flow.py)
     "comp_corrected",   # CH4 mole fraction [0,1]; NaN during flow / outside 16-33 C
     "swap_corrected",   # provenance flag; guards against a second swap
 ]
@@ -103,6 +107,9 @@ def main() -> int:
     ap.add_argument("--temp-window-scan", action="store_true",
                     help="print where the conc polynomial crosses zero (the source "
                          "of sensor_correction.TEMP_VALID) and exit")
+    ap.add_argument("--zero-slope", type=float, default=None,
+                    help="use this temperature slope [mW/K] for every unit's zero "
+                         "instead of fitting one per unit")
     args = ap.parse_args()
 
     if args.temp_window_scan:
@@ -133,6 +140,11 @@ def main() -> int:
                 skipped.append((parquet_file.relative_to(args.raw), status))
 
     print(f"\nWrote {written} CSV files to {args.out}")
+    table = zf.add_zero_cal(args.out, slope=args.zero_slope)
+    ok = table["status"] == "ok"
+    print(f"Zero-flow calibration: {int(ok.sum())} units fitted, fleet zero "
+          f"{table['fleet_p0_ref'].iloc[0]:.2f} mW at {zf.T_REF:.0f} C; "
+          f"{int((~ok).sum())} without a fit (flow_zero_cal = flow_corrected)")
     if skipped:
         # Two distinct reasons, reported separately so a failed unit (no sensor
         # payload at all) is not confused with an idle day (never in state 0).
