@@ -8,7 +8,10 @@ python3 src/derive.py
 ```
 
 That writes `data/derived_data/SN_XXXXX/YYYY-MM-DD.csv`: 2,715 files, 841,742
-rows, about 88 MB, roughly 15 s on a laptop. Keeping them out of the repository
+rows, about 100 MB, roughly 20 s on a laptop. It also writes two small tables of
+the zero-flow calibration, `zero_flow_table.csv` (one row per unit) and
+`zero_flow_weekly.csv` (weekly intercepts); see
+[`../../docs/field_correction.md`](../../docs/field_correction.md) §7. Keeping them out of the repository
 avoids shipping a pure function of the 207 MB of Parquet already tracked here.
 
 ## Only state 0 is derived
@@ -34,7 +37,7 @@ Downstream code that filters on it is a harmless no-op.
 
 ## Schema
 
-Every emitted CSV has exactly these 11 columns, in this order. The schema is
+Every emitted CSV has exactly these 12 columns, in this order. The schema is
 fixed by `OUTPUT_COLUMNS` in `src/derive.py` and reindexed explicitly, because
 the raw Parquet is *not* schema-stable (16 distinct column sets across the fleet;
 some files carry an extra `msg` column, some lack `temp`).
@@ -50,6 +53,7 @@ some files carry an extra `msg` column, some lack `temp`).
 | `powerC` | mW | **COMP**-thermistor power, swap-corrected |
 | `powerF` | mW | **FLOW**-thermistor power, swap-corrected |
 | `flow_corrected` | L/min | flow, King's-law inverse on `powerF` |
+| `flow_zero_cal` | L/min | `flow_corrected` with each unit's zero-flow power, its temperature dependence and weekly drift removed relative to the fleet (`zero_flow.py`); equals `flow_corrected` for a unit without a fit |
 | `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 17.5 to 30 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
@@ -168,6 +172,17 @@ range, and the technical paper carries that argument.)
 Treat cohort-level and temporal results as sound; treat single-household absolute
 volumes as uncertain.
 
+## What `flow_zero_cal` adds
+
+`flow_zero_cal` uses the same King's-law inverse on a power shifted by the
+unit's zero-flow offset from the fleet: the no-flow power, fitted per unit with
+a temperature slope and weekly intercepts from the unit's own no-flow rows
+([`../../docs/field_correction.md`](../../docs/field_correction.md) §7). The
+fleet scale is unchanged by construction: the fleet median daily volume moves
+by −1.5 %, individual households by −10 % to +15 %. Use it for per-household
+volumes; for cohort-level results the two columns agree. It does not remove the
+absence of a field flow reference described above.
+
 ## What earlier internal revisions emitted, and why it is gone
 
 Earlier revisions emitted every raw row with 19 columns. Removed, with reasons:
@@ -175,8 +190,9 @@ Earlier revisions emitted every raw row with 19 columns. Removed, with reasons:
 - rows outside state 0: see above
 - `powerC_raw`, `powerF_raw`: bit-identical to `powerF` and `powerC` respectively
 - `powerC_adj`, `powerF_adj`: temperature-detrended powers whose detrend
-  coefficients had no traceable provenance; the deployed polynomial and the
-  King's-law fit carry their own temperature terms
+  coefficients had no traceable provenance; the deployed polynomial carries its
+  own temperature terms, and the King's-law zero's temperature dependence is now
+  handled per unit by `flow_zero_cal`
 - `flow_corrected_poly`: the deployed 10-term flow polynomial is unphysical. It
   has no zero, returning about 11 L/min at 25 °C with both powers at exactly 0,
   and it reproduced the firmware's own corrupted `flow` column at r ≈ +0.97, so

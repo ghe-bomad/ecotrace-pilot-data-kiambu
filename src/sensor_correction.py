@@ -277,8 +277,9 @@ def add_corrected_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     Expects a swap-fixed frame (``powerF`` = flow thermistor, ``powerC`` = comp
     thermistor) and ``temp`` in deg C. The deployed polynomial and the King's-law
-    fit were calibrated on raw device-scale powers and carry their own
-    temperature dependence, so no temperature detrending is applied first.
+    fit were calibrated on raw device-scale powers, so no temperature detrending
+    is applied first: the polynomial carries its own temperature terms. King's
+    law has none; ``zero_flow`` handles its zero's temperature dependence.
     """
     if not bool(df.get("swap_corrected", pd.Series([False])).all()):
         raise ValueError("add_corrected_columns requires apply_swap_fix first")

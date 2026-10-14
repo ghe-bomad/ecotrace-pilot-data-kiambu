@@ -8,15 +8,18 @@ Analysis and figure code for the papers lives in separate repositories; see the
 |---|---|
 | `derive.py` | ingest: raw Parquet to derived CSVs; keeps state-0 rows only, then applies the correction |
 | `sensor_correction.py` | the channel-swap fix and the corrected quantities |
+| `zero_flow.py` | per-unit zero-flow calibration: fits each unit's no-flow power and fills `flow_zero_cal` |
 | `test_sensor_correction.py` | unit and integration tests for the correction, plus the deposit-metadata drift check |
+| `test_zero_flow.py` | tests for the zero-flow calibration |
 
 ```bash
 pip install -r ../requirements.txt
-python3 derive.py                 # ~15 s -> data/derived_data/, 2715 files, 88 MB
-python3 -m pytest test_sensor_correction.py
+python3 derive.py                 # ~20 s -> data/derived_data/, 2715 files, 100 MB
+python3 -m pytest
 ```
 
-`derive.py` accepts `--raw`, `--out` and `--quiet`.
+`derive.py` accepts `--raw`, `--out`, `--quiet` and `--zero-slope` (one temperature
+slope for every unit's zero instead of a per-unit fit).
 
 ## `sensor_correction.py`
 
@@ -56,13 +59,28 @@ independent estimate. The **conc** polynomial is retained and is the only path
 to `comp_corrected`.
 
 No temperature-detrended `powerC_adj` / `powerF_adj` columns are produced. The
-deployed polynomial and the King's-law fit carry their own temperature terms,
-and the detrend coefficients used in earlier internal revisions had no traceable
-provenance.
+deployed polynomial carries its own temperature terms, the King's-law zero's
+temperature dependence is fitted per unit by `zero_flow.py`, and the detrend
+coefficients used in earlier internal revisions had no traceable provenance.
+
+## `zero_flow.py`
+
+`flow_corrected` uses one lab King's-law offset for every unit. `zero_flow.py`
+fits each unit's no-flow power from its own state-0 rows (a temperature slope
+per unit, an intercept per week) and writes `flow_zero_cal`, the same inverse
+on the power shifted by the unit's offset from the fleet zero.
+`add_zero_cal()` runs over the whole derived directory after `derive.py` has
+written it, re-reading each CSV with `float_precision="round_trip"` so the
+other columns come back exactly as written. See
+[`../docs/field_correction.md`](../docs/field_correction.md) §7.
 
 ## Testing
 
-25 tests: the polynomial and King's-law formulas against their documented forms,
+`test_zero_flow.py` (25 tests) covers the zero shift and its fallbacks, the
+no-flow row selection, the fits, and the pass over a derived directory,
+including that it is idempotent and leaves every other column byte-identical.
+
+`test_sensor_correction.py` has 27 tests: the polynomial and King's-law formulas against their documented forms,
 the swap fix and its guard (including on the reduced published schema), both
 validity gates on `comp_corrected`, the state filter and fixed output schema of
 `derive.py`, and integration checks against real field data.

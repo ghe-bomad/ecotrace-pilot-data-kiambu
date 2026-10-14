@@ -54,9 +54,12 @@ the swapped columns.
 ### Stage B — recompute flow & composition (`sensor_correction.add_corrected_columns`)
 
 The deployed polynomial and King's law were calibrated on **raw, device-scale**
-powers and carry their own temperature dependence, so the corrections take the
-swap-fixed powers (`powerF`, `powerC`) and `temp` in °C directly; no temperature
-detrending is applied first (it would double-correct for T).
+powers, so the corrections take the swap-fixed powers (`powerF`, `powerC`) and
+`temp` in °C directly; no temperature detrending is applied first. The
+composition polynomial carries its own temperature terms, and detrending would
+double-correct it. The King's-law fit has none: its offset `a` is a single lab
+constant, which `flow_zero_cal` (§7) replaces with a per-unit,
+temperature-dependent zero.
 
 - **`comp_corrected`** — CH₄ mole fraction [0,1] from the deployed `conc`
   10-term polynomial in natural order (`PF=powerF`=flow thermistor,
@@ -110,6 +113,7 @@ timestamp, state, temp(°C), pressure,   # passthrough; state is always 0
 battery_volt, rssi_dbm,                  # passthrough; sparse (heartbeat stream), ~1.3% non-null
 powerC, powerF,                          # SWAP-CORRECTED (powerF=flow, powerC=comp), mW
 flow_corrected,                          # L/min, King's-law inverse on powerF
+flow_zero_cal,                           # L/min, flow_corrected with a per-unit zero (§7)
 comp_corrected,                          # CH4 mole fraction; NaN unless BOTH flow gates
                                          #   agree no-flow, and outside 16-33 °C
 swap_corrected                           # provenance flag (True)
@@ -186,9 +190,11 @@ swap); they remain in the raw Parquet.
 ## 4. Decisions made (flagged, not guessed)
 
 - **No temperature detrending before the correction.** The deployed poly and
-  King's law were fit on raw device-scale powers and carry their own T-terms;
-  feeding temperature-detrended powers would double-correct. `comp_corrected`
-  matching GT on raw powers confirms this.
+  King's law were fit on raw device-scale powers. The poly carries its own
+  T-terms, so feeding it temperature-detrended powers would double-correct;
+  `comp_corrected` matching GT on raw powers confirms this. King's law has no
+  T-term; its zero's temperature dependence is handled per unit by
+  `flow_zero_cal` (§7), not by detrending.
 - **Flow = King's-law hybrid** (not the deployed poly). It is physically
   grounded (CTA), monotonic, continuous, and extrapolates safely past Q=12 — the
   failure mode the correction targets. The deployed flow polynomial is not
@@ -240,7 +246,72 @@ swap); they remain in the raw Parquet.
 
 - The deployed polynomial and lab King's-law coefficients (one firmware build)
   apply to all field units; per-device manufacturing spread is not separated
-  out (single calibration for the fleet).
+  out (single calibration for the fleet). `flow_zero_cal` (§7) removes the
+  per-device spread of the flow channel's **zero**, but not of its gain `b`.
 - `temp` is the gas/sensor temperature in °C (confirmed: field range ~13–37 °C),
   the unit the deployed poly expects.
+
+## 7. Per-unit zero-flow calibration (`flow_zero_cal`)
+
+*Added in v1.1.0. Code: `src/zero_flow.py`, applied by `derive.py` after every
+file has been derived.*
+
+**Why.** `flow_corrected` inverts King's law with one lab offset,
+`a = 22.39 mW`, for every unit. Measured in the field, the flow thermistor's
+no-flow power at 25 °C ranges from 22.26 to 24.39 mW across the 22 units
+(fleet median 23.42 mW), rises with temperature by 0.025 to 0.173 mW/K
+depending on the unit, and on three household units (SN_01001, SN_01004,
+SN_01017) drifts by more than 1.5 mW from week to week. Because flow goes as
+the square of `P − a`, a 1 mW error in the zero is a 14 % flow error at
+5 L/min and 18 % at 3 L/min.
+
+**Which rows define the zero.** State-0 rows of the unit with
+`powerF < 27.10 mW` (the power that reads 0.5 L/min, the same threshold as the
+composition gate), a known temperature, and more than 45 min after the unit's
+last row at or above 2 L/min, so that a bead or gas still cooling after
+cooking does not bias the zero. The fitted zero changes by at most about
+0.1 mW between 15 and 90 min of exclusion, so the choice is not critical.
+
+**The model.** `P0(T) = p0 + slope·(T − 25 °C)`, with one slope per unit
+(least squares on all its no-flow rows; standard errors ≤ 0.002 mW/K) and
+the intercept `p0` taken per UTC week where the week has at least 100 no-flow
+rows, or the unit's intercept otherwise. Temperature is clipped to the unit's
+5th to 95th percentile of fitted temperatures, and a row without a
+temperature uses the zero at 25 °C. Then
+
+```
+shift         = P0_unit(T) − P0_fleet(25 °C)
+flow_zero_cal = kings_flow(powerF − shift)
+```
+
+where `P0_fleet` is the median of the units' intercepts. A unit with fewer
+than 500 no-flow rows gets no shift (`flow_zero_cal = flow_corrected`); all 22
+units in this release have enough.
+
+**Why relative to the fleet.** Replacing `a` with each unit's measured zero
+would lower every flow, because the fleet's field zero sits about 1 mW above
+the lab offset, and there is no field flow reference to say which is right.
+Shifting relative to the fleet keeps the cohort scale of the lab calibration,
+the scale the pressure-drawdown cross-check supports, and removes only the
+unit-to-unit, week-to-week and temperature differences of the zero. The fleet
+median daily volume changes by −1.5 %; per household the median daily volume
+changes by −10 % to +15 %.
+
+**Outputs.** Besides the column, `derive.py` writes
+`data/derived_data/zero_flow_table.csv` (one row per unit: rows used,
+`p0_ref`, `slope`, fitted temperature range, residual SD, status, and the
+fleet zero) and `data/derived_data/zero_flow_weekly.csv` (the weekly
+intercepts).
+
+**Limits.**
+
+- There is still no field flow reference. `flow_zero_cal` makes units more
+  consistent with each other; it does not pin the absolute scale.
+- The pressure-drawdown comparison cannot show the improvement: its scatter,
+  set mainly by per-plant dome compliance, is larger than the change.
+- The zero absorbs the CH₄-dependence of the bead's conduction offset only as
+  a per-unit (or per-week) average, not row by row.
+- The gain `b` is still the single lab value for every unit.
+- The temperature slope is fitted at no flow and applied at all flows, which
+  assumes the temperature effect on the bead is an additive offset.
 
