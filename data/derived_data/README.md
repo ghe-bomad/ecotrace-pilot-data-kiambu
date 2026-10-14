@@ -178,9 +178,12 @@ volumes as uncertain.
 unit's zero-flow offset from the fleet: the no-flow power, fitted per unit with
 a temperature slope and weekly intercepts from the unit's own no-flow rows
 ([`../../docs/field_correction.md`](../../docs/field_correction.md) §7). The
-fleet scale is unchanged by construction: the fleet median daily volume moves
-by −1.5 %, individual households by −10 % to +15 %. Use it for per-household
-volumes; for cohort-level results the two columns agree. It does not remove the
+fleet scale moves little: over the 17 household units total volume changes by
+−3.4 %, and individual households' median daily volume by −11 % to +14 % (all
+days, Africa/Nairobi dates). The two ILRI research reactors (SN_01005,
+SN_01010) change by about −27 % and have a much noisier zero; use their
+`flow_zero_cal` with caution. Use it for per-household volumes; for
+cohort-level results the two columns agree. It does not remove the
 absence of a field flow reference described above.
 
 ## What earlier internal revisions emitted, and why it is gone

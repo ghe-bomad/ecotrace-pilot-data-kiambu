@@ -238,3 +238,18 @@ def test_add_zero_cal_rewrites_other_columns_byte_identically(tmp_path):
     after = pd.read_csv(f, dtype=str)
     cols = [c for c in before.columns if c != "flow_zero_cal"]
     pd.testing.assert_frame_equal(before[cols], after[cols])
+
+
+def test_fit_zero_intercept_is_the_median_like_the_weekly_zero():
+    """The unit intercept and the weekly intercepts must be the same estimator
+    (median of detrended power), or the published p0_ref, the fleet zero and
+    the fallback for sparse weeks disagree with the zero applied elsewhere."""
+    rng = np.random.default_rng(1)
+    t = rng.uniform(17, 35, 2000)
+    p = 23.5 + 0.1 * (t - 25) + rng.exponential(0.5, t.size)      # skewed, so mean != median
+    df = pd.DataFrame({"timestamp": pd.Timestamp("2026-03-02", tz="UTC")
+                       + pd.to_timedelta(np.arange(t.size), unit="min"), "temp": t, "powerF": p})
+    f = zf.fit_zero(df, "SN_X")
+    assert f["p0_ref"] == pytest.approx(np.median(p - f["slope"] * (t - zf.T_REF)))
+    w = zf.fit_weekly_zero(df, f["slope"], n_min=1)
+    assert len(w) == 1 and w.iloc[0] == pytest.approx(f["p0_ref"])

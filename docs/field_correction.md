@@ -258,8 +258,8 @@ file has been derived.*
 
 **Why.** `flow_corrected` inverts King's law with one lab offset,
 `a = 22.39 mW`, for every unit. Measured in the field, the flow thermistor's
-no-flow power at 25 °C ranges from 22.26 to 24.39 mW across the 22 units
-(fleet median 23.42 mW), rises with temperature by 0.025 to 0.173 mW/K
+no-flow power at 25 °C ranges from 22.23 to 24.24 mW across the 22 units
+(fleet median 23.35 mW), rises with temperature by 0.025 to 0.173 mW/K
 depending on the unit, and on three household units (SN_01001, SN_01004,
 SN_01017) drifts by more than 1.5 mW from week to week. Because flow goes as
 the square of `P − a`, a 1 mW error in the zero is a 14 % flow error at
@@ -274,8 +274,9 @@ cooking does not bias the zero. The fitted zero changes by at most about
 
 **The model.** `P0(T) = p0 + slope·(T − 25 °C)`, with one slope per unit
 (least squares on all its no-flow rows; standard errors ≤ 0.002 mW/K) and
-the intercept `p0` taken per UTC week where the week has at least 100 no-flow
-rows, or the unit's intercept otherwise. Temperature is clipped to the unit's
+the intercept `p0`, the median of the detrended no-flow power, taken per UTC
+week where the week has at least 100 no-flow rows, or over all the unit's rows
+otherwise. Temperature is clipped to the unit's
 5th to 95th percentile of fitted temperatures, and a row without a
 temperature uses the zero at 25 °C. Then
 
@@ -294,8 +295,17 @@ the lab offset, and there is no field flow reference to say which is right.
 Shifting relative to the fleet keeps the cohort scale of the lab calibration,
 the scale the pressure-drawdown cross-check supports, and removes only the
 unit-to-unit, week-to-week and temperature differences of the zero. The fleet
-median daily volume changes by −1.5 %; per household the median daily volume
-changes by −10 % to +15 %.
+scale moves little but is not fixed exactly, because the temperature term is
+referenced to 25 °C and gas is usually warmer while it flows. Over the 17
+household units (all days, Africa/Nairobi dates), total volume changes by
+−3.4 % and the median of the household median daily volumes by +0.9 %; per
+household the median daily volume changes by −11 % to +14 %.
+
+**Research reactors.** SN_01005 and SN_01010, the two ILRI research digesters,
+are fitted, but their no-flow power scatters three to five times more than on
+the household units (residual SD 1.2 and 1.4 mW, against 0.2 to 0.8 mW), and
+their total volume drops by about 27 %. Use their `flow_zero_cal` with
+caution.
 
 **Outputs.** Besides the column, `derive.py` writes
 `data/derived_data/zero_flow_table.csv` (one row per unit: rows used,

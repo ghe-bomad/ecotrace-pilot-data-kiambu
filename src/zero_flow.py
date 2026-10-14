@@ -66,7 +66,12 @@ def select_no_flow(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fit_zero(noflow: pd.DataFrame, sensor: str, slope: float | None = None) -> dict:
-    """Fit P0(T) = p0_ref + slope * (T - T_REF). A given ``slope`` is used as is."""
+    """Fit P0(T) = p0_ref + slope * (T - T_REF). A given ``slope`` is used as is.
+
+    The slope is least squares; the intercept is the median of the detrended
+    power, the same estimator as the weekly intercepts (``fit_weekly_zero``),
+    so the unit zero, the fleet zero and the weekly zeros are comparable.
+    """
     n = len(noflow)
     if n < N_MIN:
         return dict(sensor=sensor, n_rows=n, p0_ref=np.nan, slope=np.nan,
@@ -74,9 +79,8 @@ def fit_zero(noflow: pd.DataFrame, sensor: str, slope: float | None = None) -> d
     t = noflow["temp"].to_numpy(float)
     p = noflow["powerF"].to_numpy(float)
     if slope is None:
-        slope, p0 = np.polyfit(t - T_REF, p, 1)
-    else:
-        p0 = float(np.median(p - slope * (t - T_REF)))
+        slope = float(np.polyfit(t - T_REF, p, 1)[0])
+    p0 = float(np.median(p - slope * (t - T_REF)))
     resid = p - (p0 + slope * (t - T_REF))
     return dict(sensor=sensor, n_rows=n, p0_ref=float(p0), slope=float(slope),
                 t_lo=float(np.percentile(t, 5)), t_hi=float(np.percentile(t, 95)),

@@ -9,7 +9,9 @@ abstract: >-
   device output. Covers 22 devices, 2,975 device-days and 5,499,810 telemetry
   rows. The deployed firmware crossed the two thermistor ADC channels, so the
   raw flow and composition columns are corrupted; the included derivation code
-  undoes the channel swap and recomputes both quantities.
+  undoes the channel swap and recomputes both quantities. Release 1.1.0 adds
+  flow_zero_cal, the corrected flow with a per-unit, temperature-dependent
+  zero-flow calibration.
 type: dataset
 license: CC-BY-4.0
 version: 1.1.0
