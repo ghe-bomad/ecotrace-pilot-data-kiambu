@@ -55,7 +55,7 @@ some files carry an extra `msg` column, some lack `temp`).
 | `powerF` | mW | **FLOW**-thermistor power, swap-corrected |
 | `flow_corrected` | L/min | flow, King's-law inverse on `powerF` |
 | `flow_zero_cal` | L/min | `flow_corrected` with each unit's zero-flow power, its temperature dependence and weekly drift removed relative to the fleet (`zero_flow.py`); equals `flow_corrected` for a unit without a fit |
-| `gap_fill_L` | L | gas that flowed while the unit slept during use, filled from the flows before and after the sleep and written on the first row after it (`gap_fill.py`); 0 on every other row |
+| `gap_fill_L` | L | unmeasured gas next to this row: a row with gas in use (`flow_zero_cal` ≥ 2 L/min) stands in for half of the unmeasured time on each side, at its own flow, up to one sleep cycle per side (`gap_fill.py`); 0 on rows not in use |
 | `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 17.5 to 30 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
@@ -199,16 +199,17 @@ sum of flow_zero_cal over rows with flow_zero_cal >= 0.5 L/min   (x 1 min)
 ```
 
 grouped by the day of each row. Rows below 0.5 L/min are idle: a unit at its
-zero still reads about 0.02 L/min. `gap_fill_L` adds the gas that flowed while
-a unit slept during use: about 10,000 such sleeps on the household units, 8.7 %
-of their gas, with a holdout bias of +0.16 %. The method, its validation and its
-limits are in [`../../docs/field_correction.md`](../../docs/field_correction.md)
-§8.
+zero still reads about 0.02 L/min. `gap_fill_L` adds the gas in unmeasured time
+next to rows with gas in use: sleeps during use, the starts and ends of use, and
+the cycle next to longer gaps. On the household units it adds 21.9 % of their
+gas; the part for sleeps between flowing rows reproduces held-out measured
+minutes with a bias of +0.06 %. The method, its validation and its limits are in
+[`../../docs/field_correction.md`](../../docs/field_correction.md) §8.
 
 Do not add `gap_fill_L` to a time-weighted integral that already carries
 readings across gaps (flow multiplied by the time since the previous row): that
-counts the sleeps twice. Gas at the start of use, while the unit was still
-asleep, is not filled, so these volumes are a lower bound.
+counts the unmeasured time twice. The interiors of gaps longer than one sleep
+cycle are not filled, so these volumes are a lower bound there.
 
 ## What earlier internal revisions emitted, and why it is gone
 

@@ -62,9 +62,9 @@ and recomputes:
   and its temperature dependence removed relative to the fleet
   ([`docs/field_correction.md`](docs/field_correction.md) §7). Prefer it for
   per-household volumes; the two agree at fleet level.
-- **`gap_fill_L`**, L: gas that flowed while a unit slept during use, filled
-  from the flows before and after the sleep
-  ([`docs/field_correction.md`](docs/field_correction.md) §8). Daily volume is
+- **`gap_fill_L`**, L: unmeasured gas next to rows with gas in use (sleeps
+  during use, starts and ends of use, the cycle next to longer gaps), filled at
+  the row's own flow ([`docs/field_correction.md`](docs/field_correction.md) §8). Daily volume is
   the sum of `flow_zero_cal` over rows at or above 0.5 L/min (one minute each)
   plus the sum of `gap_fill_L`; see
   [`data/derived_data/README.md`](data/derived_data/README.md#computing-gas-volumes).

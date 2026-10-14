@@ -9,7 +9,7 @@ Analysis and figure code for the papers lives in separate repositories; see the
 | `derive.py` | ingest: raw Parquet to derived CSVs; keeps state-0 rows only, then applies the correction |
 | `sensor_correction.py` | the channel-swap fix and the corrected quantities |
 | `zero_flow.py` | per-unit zero-flow calibration: fits each unit's no-flow power and fills `flow_zero_cal` |
-| `gap_fill.py` | fills `gap_fill_L`, the gas that flowed while a unit slept during use, and its holdout check |
+| `gap_fill.py` | fills `gap_fill_L`, the unmeasured gas next to rows with gas in use, and its holdout check |
 | `test_sensor_correction.py` | unit and integration tests for the correction, plus the deposit-metadata drift check |
 | `test_zero_flow.py` | tests for the zero-flow calibration |
 | `test_gap_fill.py` | tests for the gap filling |
@@ -79,20 +79,21 @@ other columns come back exactly as written. See
 
 ## `gap_fill.py`
 
-Units often fell asleep while gas was still flowing, because the firmware's
-stay-awake decision used the crossed channels. `gap_fill.py` fills such a sleep
-when it lies between two flowing rows one sleep cycle apart whose flows differ by
-at most 30 %, at the mean of the two flows, and writes the litres to `gap_fill_L`
-on the row after the sleep. `add_gap_fill()` runs over all of a unit's files at
-once, so sleeps across midnight are filled, and writes `gap_fill_summary.csv`.
+Units sleep between measurements and often fell asleep while gas was still
+flowing, because the firmware's stay-awake decision used the crossed channels.
+`gap_fill.py` lets every row with gas in use stand in for half of the unmeasured
+time on each side of it, at its own flow, up to one sleep cycle per side, and
+writes the litres to `gap_fill_L` on that row. `add_gap_fill()` runs over all of
+a unit's files at once, so gaps across midnight are handled, and writes
+`gap_fill_summary.csv`.
 `holdout_check()` tests the rule on continuous measuring runs. See
 [`../docs/field_correction.md`](../docs/field_correction.md) §8.
 
 ## Testing
 
-`test_gap_fill.py` (15 tests) covers the rule and each of its exclusions, the
-holdout check, sleeps across file boundaries, the unit summary, idempotency,
-and an end-to-end run of `derive.py`.
+`test_gap_fill.py` (16 tests) covers the rule for sleeps, starts, ends, long
+gaps and cycling through use, the holdout check, gaps across file boundaries,
+the unit summary, idempotency, and an end-to-end run of `derive.py`.
 
 `test_zero_flow.py` (26 tests) covers the zero shift and its fallbacks, the
 no-flow row selection, the fits, and the pass over a derived directory,

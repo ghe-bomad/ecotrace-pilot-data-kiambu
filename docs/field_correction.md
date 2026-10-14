@@ -325,52 +325,75 @@ intercepts).
 - The temperature slope is fitted at no flow and applied at all flows, which
   assumes the temperature effect on the bead is an additive offset.
 
-## 8. Gap filling of sleeps during use (`gap_fill_L`)
+## 8. Gap filling of unmeasured time next to gas use (`gap_fill_L`)
 
 *Added in v1.1.0. Code: `src/gap_fill.py`, applied by `derive.py` after §7.*
 
-**Why.** The device duty-cycles. While measuring, it stays awake only if its own
-on-board flow estimate exceeds 2.5 L/min at least once every 30 s; otherwise it
-sleeps for 220 s and warms up for 50 s, so state-0 rows are then 300 s apart.
-That on-board estimate is `calc_flow` on the same crossed thermistor channels as
-the firmware `flow` column (§1), so during cooking it often read low and units
-fell asleep while gas was still flowing, measuring only one minute in five.
-Evidence from the 17 household units:
+**Why.** State-0 rows are one minute apart only while a unit stays awake. The
+device duty-cycles: while measuring, it stays awake only if its own on-board flow
+estimate exceeds 2.5 L/min at least once every 30 s; otherwise it sleeps for
+220 s and warms up for 50 s, so a measured minute is followed by about four
+unmeasured ones. Gas therefore goes unmeasured in three situations:
 
-- about 10,000 sleeps lie between two state-0 rows that both show gas in use;
-  in 96 % of them the unit had been awake for a single logged minute;
-- the flow before and after such a sleep is nearly the same (median 6.7 and
-  6.8 L/min, ratio 0.99);
-- dome pressure falls across these sleeps at a median 0.19 mbar/min, against
-  0.22 mbar/min while measured and flowing, and rises by 0.05 mbar/min across
-  sleeps without gas use.
+- **Sleeps during use.** The on-board estimate is `calc_flow` on the same
+  crossed thermistor channels as the firmware `flow` column (§1), so during
+  cooking it often read low and units fell asleep while gas was still flowing.
+  On the 17 household units about 10,000 sleeps lie between two state-0 rows
+  that both show gas in use; in 96 % of them the unit had been awake for a
+  single logged minute, the flow before and after is nearly the same (median
+  6.7 and 6.8 L/min), and dome pressure falls across these sleeps at a median
+  0.19 mbar/min, against 0.22 mbar/min while measured and flowing and a rise of
+  0.05 mbar/min across sleeps without use.
+- **Starts and ends of use**, which fall at an unknown point inside a sleep.
+- **Gaps longer than one cycle.** Most are not telemetry losses: the device kept
+  logging sleep and warm-up rows, but no state-0 row was recorded, because the
+  300 s cycle is a multiple of the 60 s logging interval and the awake window
+  can be as short as 30 s, so for long stretches the logging tick can miss every
+  awake window. The rest are telemetry losses (heartbeats only, or nothing).
 
-**The rule.** A sleep is filled when it lies between two state-0 rows that are
-one sleep cycle apart (more than 120 s and at most 330 s; in practice 300 s),
-both rows have `flow_zero_cal` at or above 2 L/min, and the flow after the sleep
-differs from the flow before it by at most 30 % of the flow before. Each row
-already stands for its own minute, so `gap − 60 s` is unmeasured; it is filled
-at the mean of the two flows, and the litres are written to `gap_fill_L` on the
-first row after the sleep. Every other row gets 0. A sleep that crosses midnight
-is filled on the row after it, so its litres count towards that day.
+**The rule.** Every row with gas in use (`flow_zero_cal` at or above 2 L/min)
+stands in for half of the unmeasured time on each side of it, at its own flow,
+up to one sleep cycle per side:
 
-Not filled: the start of use (the row before the sleep is quiet, so the start
-time is unknown), sleeps whose flows differ by more than 30 %, and gaps longer
-than one sleep cycle, which are data gaps rather than sleeps.
+```
+unmeasured time on one side = min(gap to the neighbouring state-0 row, 300 s) - 60 s   (at least 0)
+gap_fill_L = flow_zero_cal x (unmeasured before + unmeasured after) / 2
+```
+
+Each row already stands for its own minute, hence the 60 s. The litres are
+written to `gap_fill_L` on the row itself; rows below 2 L/min get 0. This gives:
+
+- a sleep between two flowing rows filled at the mean of their two flows;
+- the start or the end of use filled with half the sleep in which it fell, the
+  expected value when the time of use is independent of where the device is in
+  its cycle;
+- for gaps longer than one cycle, only the cycle next to each measured row; the
+  interior is left empty.
+
+The interior of longer gaps is left empty on evidence: for gaps with gas in use
+on both sides, the pressure fall across the gap, compared with each unit's
+measured relation between flow and pressure fall, implies gas was drawn for a
+median 68 % of 6 to 10 min gaps, 26 % of 15 to 20 min gaps and about 10 % of
+gaps longer than 30 min. Use across such gaps is mostly separate sessions, not
+continuous, and filling them at the neighbouring flow would overcount. Pressure
+is used only for this check, not to fill any gap, so the pressure-drawdown
+cross-check stays independent of the thermal volumes.
 
 **Validation.** In continuous measuring runs every minute is logged, so the rule
-can be tested by hiding four logged minutes between two kept ones (the length of
-a 300 s sleep) and comparing the filled volume with the logged one. Over all 22
-units, 204,529 such windows pass the rule; filled/logged has a median of 1.000
-(IQR 0.992 to 1.009) and the total bias is +0.16 %. The flow changes less across
-real sleeps during use (median 3 %) than across these windows (median 5 %).
-`python3 src/derive.py --gap-fill-check` reruns the test on the derived data.
+for sleeps between flowing rows can be tested by hiding four logged minutes
+between two kept ones (the length of a 300 s sleep) and filling them. Over all
+22 units, 241,017 such windows: filled/logged median 1.000 (IQR 0.989 to 1.011),
+total bias +0.06 %. `python3 src/derive.py --gap-fill-check` reruns the test.
+The start/end half is an expected value and cannot be tested this way; the
+pressure signal around starts and ends is dominated by line transients (a fast
+drop when a burner opens, a rebound when it closes) and cannot calibrate it
+either.
 
-**Result.** Across all units, 11,200 of 13,157 sleeps during use are filled
-(313 m³). On the 17 household units, 8,457 of 10,131 are filled, which adds
-8.7 % to their total gas use. The share varies by unit, from under 1 % to 49 %
-(SN_01003, a low-use unit that cycled through most of its use; SN_01001 23 %).
-On the ILRI research reactor SN_01005 it is 74 %.
+**Result.** On the 17 household units the fill adds 720 m³ to 2,569 m³ of
+measured gas, 21.9 % of the total: 9.0 % from sleeps between flowing rows, 5.3 %
+from starts and ends of use, and 7.5 % from the cycle next to longer gaps. The
+share varies by unit, from 9 % (SN_01016) to 60 % (SN_01003, a low-use unit that
+cycled through most of its use). On the ILRI research reactor SN_01005 it is 76 %.
 
 **How to use it.** Daily gas volume is
 
@@ -381,19 +404,20 @@ sum of flow_zero_cal over rows with flow_zero_cal >= 0.5 L/min   (x 1 min)
 
 grouped by the day of each row. Do not add `gap_fill_L` to a time-weighted
 integral that already carries readings across gaps (flow multiplied by the time
-since the previous row): that counts the sleeps twice.
+since the previous row): that counts the unmeasured time twice.
 
 **Outputs.** The `gap_fill_L` column, and `data/derived_data/gap_fill_summary.csv`
-with one row per unit: sleeps during use, sleeps filled, litres filled, and the
-measured litres (rows at or above 0.5 L/min).
+with one row per unit: rows extended, litres filled, measured litres (rows at or
+above 0.5 L/min), and hours in gaps longer than one cycle.
 
 **Limits.**
 
-- The start of use is not filled, so volumes remain a lower bound.
-- The rule assumes gas flowed through the whole sleep. The holdout includes the
-  brief stops that happen while a unit is awake, but a stop and restart hidden
-  entirely inside a sleep cannot be seen. Pressure across filled sleeps falls at
-  about 90 % of the rate seen while measured and flowing, so the filled volume
-  may be up to about 10 % high.
+- The interiors of gaps longer than one cycle are not filled, so volumes remain
+  a lower bound wherever gas was used inside such a gap. The summary table gives
+  the hours affected; analyses that need complete days should check telemetry
+  completeness.
+- The start/end fill is an expected value: right on average over many events,
+  not for any single one.
+- A stop and restart hidden entirely inside a single sleep between two flowing
+  rows cannot be seen.
 - Filled values inherit the uncertainty of `flow_zero_cal`.
-- The 30 % tolerance is relative to the flow before the sleep.

@@ -14,8 +14,8 @@ This is the single central ingest step. Besides the format conversion it
     from the King's-law inverse);
   * then, over all units, fits each unit's zero-flow power and fills
     ``flow_zero_cal`` (see ``zero_flow`` and ``docs/field_correction.md`` section 7);
-  * then fills ``gap_fill_L``, the gas that flowed while a unit slept during use
-    (see ``gap_fill`` and ``docs/field_correction.md`` section 8).
+  * then fills ``gap_fill_L``, the gas in unmeasured time next to rows with gas
+    in use (see ``gap_fill`` and ``docs/field_correction.md`` section 8).
 
 The firmware's own ``flow`` and ``comp`` columns are corrupted by the swap and
 are NOT carried into the output; analysis uses the ``*_corrected`` columns.
@@ -60,7 +60,7 @@ OUTPUT_COLUMNS = [
     "powerF",           # FLOW-thermistor power, mW (swap-corrected)
     "flow_corrected",   # L/min, King's-law inverse on powerF
     "flow_zero_cal",    # L/min, flow_corrected with a per-unit zero (zero_flow.py)
-    "gap_fill_L",       # L, gas filled into the sleep before this row during use (gap_fill.py)
+    "gap_fill_L",       # L, unmeasured gas next to this row, filled at its flow (gap_fill.py)
     "comp_corrected",   # CH4 mole fraction [0,1]; NaN during flow / outside 16-33 C
     "swap_corrected",   # provenance flag; guards against a second swap
 ]
@@ -170,8 +170,8 @@ def main() -> int:
     gfs = gf.add_gap_fill(args.out)
     if len(gfs):
         share = gfs["filled_L"].sum() / (gfs["measured_L"].sum() + gfs["filled_L"].sum())
-        print(f"Gap filling: {int(gfs['n_filled'].sum()):,} of {int(gfs['n_sleeps_during_use'].sum()):,} "
-              f"sleeps during use filled, {gfs['filled_L'].sum():,.0f} L ({share:.1%} of the total)")
+        print(f"Gap filling: {int(gfs['n_rows_extended'].sum()):,} rows in use extended into unmeasured "
+              f"time, {gfs['filled_L'].sum():,.0f} L ({share:.1%} of the total)")
     if skipped:
         # Two distinct reasons, reported separately so a failed unit (no sensor
         # payload at all) is not confused with an idle day (never in state 0).
