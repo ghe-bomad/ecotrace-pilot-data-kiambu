@@ -325,3 +325,75 @@ intercepts).
 - The temperature slope is fitted at no flow and applied at all flows, which
   assumes the temperature effect on the bead is an additive offset.
 
+## 8. Gap filling of sleeps during use (`gap_fill_L`)
+
+*Added in v1.1.0. Code: `src/gap_fill.py`, applied by `derive.py` after §7.*
+
+**Why.** The device duty-cycles. While measuring, it stays awake only if its own
+on-board flow estimate exceeds 2.5 L/min at least once every 30 s; otherwise it
+sleeps for 220 s and warms up for 50 s, so state-0 rows are then 300 s apart.
+That on-board estimate is `calc_flow` on the same crossed thermistor channels as
+the firmware `flow` column (§1), so during cooking it often read low and units
+fell asleep while gas was still flowing, measuring only one minute in five.
+Evidence from the 17 household units:
+
+- about 10,000 sleeps lie between two state-0 rows that both show gas in use;
+  in 96 % of them the unit had been awake for a single logged minute;
+- the flow before and after such a sleep is nearly the same (median 6.7 and
+  6.8 L/min, ratio 0.99);
+- dome pressure falls across these sleeps at a median 0.19 mbar/min, against
+  0.22 mbar/min while measured and flowing, and rises by 0.05 mbar/min across
+  sleeps without gas use.
+
+**The rule.** A sleep is filled when it lies between two state-0 rows that are
+one sleep cycle apart (more than 120 s and at most 330 s; in practice 300 s),
+both rows have `flow_zero_cal` at or above 2 L/min, and the flow after the sleep
+differs from the flow before it by at most 30 % of the flow before. Each row
+already stands for its own minute, so `gap − 60 s` is unmeasured; it is filled
+at the mean of the two flows, and the litres are written to `gap_fill_L` on the
+first row after the sleep. Every other row gets 0. A sleep that crosses midnight
+is filled on the row after it, so its litres count towards that day.
+
+Not filled: the start of use (the row before the sleep is quiet, so the start
+time is unknown), sleeps whose flows differ by more than 30 %, and gaps longer
+than one sleep cycle, which are data gaps rather than sleeps.
+
+**Validation.** In continuous measuring runs every minute is logged, so the rule
+can be tested by hiding four logged minutes between two kept ones (the length of
+a 300 s sleep) and comparing the filled volume with the logged one. Over all 22
+units, 204,529 such windows pass the rule; filled/logged has a median of 1.000
+(IQR 0.992 to 1.009) and the total bias is +0.16 %. The flow changes less across
+real sleeps during use (median 3 %) than across these windows (median 5 %).
+`python3 src/derive.py --gap-fill-check` reruns the test on the derived data.
+
+**Result.** Across all units, 11,200 of 13,157 sleeps during use are filled
+(313 m³). On the 17 household units, 8,457 of 10,131 are filled, which adds
+8.7 % to their total gas use. The share varies by unit, from under 1 % to 49 %
+(SN_01003, a low-use unit that cycled through most of its use; SN_01001 23 %).
+On the ILRI research reactor SN_01005 it is 74 %.
+
+**How to use it.** Daily gas volume is
+
+```
+sum of flow_zero_cal over rows with flow_zero_cal >= 0.5 L/min   (x 1 min)
++ sum of gap_fill_L
+```
+
+grouped by the day of each row. Do not add `gap_fill_L` to a time-weighted
+integral that already carries readings across gaps (flow multiplied by the time
+since the previous row): that counts the sleeps twice.
+
+**Outputs.** The `gap_fill_L` column, and `data/derived_data/gap_fill_summary.csv`
+with one row per unit: sleeps during use, sleeps filled, litres filled, and the
+measured litres (rows at or above 0.5 L/min).
+
+**Limits.**
+
+- The start of use is not filled, so volumes remain a lower bound.
+- The rule assumes gas flowed through the whole sleep. The holdout includes the
+  brief stops that happen while a unit is awake, but a stop and restart hidden
+  entirely inside a sleep cannot be seen. Pressure across filled sleeps falls at
+  about 90 % of the rate seen while measured and flowing, so the filled volume
+  may be up to about 10 % high.
+- Filled values inherit the uncertainty of `flow_zero_cal`.
+- The 30 % tolerance is relative to the flow before the sleep.

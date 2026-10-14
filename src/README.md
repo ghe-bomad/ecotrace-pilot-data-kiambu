@@ -9,17 +9,20 @@ Analysis and figure code for the papers lives in separate repositories; see the
 | `derive.py` | ingest: raw Parquet to derived CSVs; keeps state-0 rows only, then applies the correction |
 | `sensor_correction.py` | the channel-swap fix and the corrected quantities |
 | `zero_flow.py` | per-unit zero-flow calibration: fits each unit's no-flow power and fills `flow_zero_cal` |
+| `gap_fill.py` | fills `gap_fill_L`, the gas that flowed while a unit slept during use, and its holdout check |
 | `test_sensor_correction.py` | unit and integration tests for the correction, plus the deposit-metadata drift check |
 | `test_zero_flow.py` | tests for the zero-flow calibration |
+| `test_gap_fill.py` | tests for the gap filling |
 
 ```bash
 pip install -r ../requirements.txt
-python3 derive.py                 # ~20 s -> data/derived_data/, 2715 files, 100 MB
+python3 derive.py                 # ~30 s -> data/derived_data/, 2715 files, 105 MB
 python3 -m pytest
 ```
 
-`derive.py` accepts `--raw`, `--out`, `--quiet` and `--zero-slope` (one temperature
-slope for every unit's zero instead of a per-unit fit).
+`derive.py` accepts `--raw`, `--out`, `--quiet`, `--zero-slope` (one temperature
+slope for every unit's zero instead of a per-unit fit) and `--gap-fill-check`
+(the holdout test of the gap filling on existing derived data).
 
 ## `sensor_correction.py`
 
@@ -74,9 +77,24 @@ written it, re-reading each CSV with `float_precision="round_trip"` so the
 other columns come back exactly as written. See
 [`../docs/field_correction.md`](../docs/field_correction.md) §7.
 
+## `gap_fill.py`
+
+Units often fell asleep while gas was still flowing, because the firmware's
+stay-awake decision used the crossed channels. `gap_fill.py` fills such a sleep
+when it lies between two flowing rows one sleep cycle apart whose flows differ by
+at most 30 %, at the mean of the two flows, and writes the litres to `gap_fill_L`
+on the row after the sleep. `add_gap_fill()` runs over all of a unit's files at
+once, so sleeps across midnight are filled, and writes `gap_fill_summary.csv`.
+`holdout_check()` tests the rule on continuous measuring runs. See
+[`../docs/field_correction.md`](../docs/field_correction.md) §8.
+
 ## Testing
 
-`test_zero_flow.py` (25 tests) covers the zero shift and its fallbacks, the
+`test_gap_fill.py` (15 tests) covers the rule and each of its exclusions, the
+holdout check, sleeps across file boundaries, the unit summary, idempotency,
+and an end-to-end run of `derive.py`.
+
+`test_zero_flow.py` (26 tests) covers the zero shift and its fallbacks, the
 no-flow row selection, the fits, and the pass over a derived directory,
 including that it is idempotent and leaves every other column byte-identical.
 

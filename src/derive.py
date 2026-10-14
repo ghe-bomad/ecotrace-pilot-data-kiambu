@@ -13,7 +13,9 @@ This is the single central ingest step. Besides the format conversion it
   * adds ``comp_corrected`` (CH4 mole fraction) and ``flow_corrected`` (L/min,
     from the King's-law inverse);
   * then, over all units, fits each unit's zero-flow power and fills
-    ``flow_zero_cal`` (see ``zero_flow`` and ``docs/field_correction.md`` section 7).
+    ``flow_zero_cal`` (see ``zero_flow`` and ``docs/field_correction.md`` section 7);
+  * then fills ``gap_fill_L``, the gas that flowed while a unit slept during use
+    (see ``gap_fill`` and ``docs/field_correction.md`` section 8).
 
 The firmware's own ``flow`` and ``comp`` columns are corrupted by the swap and
 are NOT carried into the output; analysis uses the ``*_corrected`` columns.
@@ -27,6 +29,7 @@ the fleet, some files carrying an extra ``msg`` column and some lacking
 ``temp``), so the output columns are explicitly reindexed rather than inherited.
 
 Usage:  python3 src/derive.py [--raw DIR] [--out DIR] [--quiet] [--zero-slope MW_PER_K]
+        python3 src/derive.py --gap-fill-check   (holdout test of the gap filling, on --out)
 """
 import argparse
 import sys
@@ -37,6 +40,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sensor_correction as sc  # noqa: E402
 import zero_flow as zf  # noqa: E402
+import gap_fill as gf  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -56,6 +60,7 @@ OUTPUT_COLUMNS = [
     "powerF",           # FLOW-thermistor power, mW (swap-corrected)
     "flow_corrected",   # L/min, King's-law inverse on powerF
     "flow_zero_cal",    # L/min, flow_corrected with a per-unit zero (zero_flow.py)
+    "gap_fill_L",       # L, gas filled into the sleep before this row during use (gap_fill.py)
     "comp_corrected",   # CH4 mole fraction [0,1]; NaN during flow / outside 16-33 C
     "swap_corrected",   # provenance flag; guards against a second swap
 ]
@@ -107,6 +112,9 @@ def main() -> int:
     ap.add_argument("--temp-window-scan", action="store_true",
                     help="print where the conc polynomial crosses zero (the source "
                          "of sensor_correction.TEMP_VALID) and exit")
+    ap.add_argument("--gap-fill-check", action="store_true",
+                    help="test the gap-filling rule on the continuous measuring runs of the "
+                         "derived data in --out (holdout) and exit")
     ap.add_argument("--zero-slope", type=float, default=None,
                     help="use this temperature slope [mW/K] for every unit's zero "
                          "instead of fitting one per unit")
@@ -120,6 +128,20 @@ def main() -> int:
         print(f"  crosses zero at {lo:.2f} C and {hi:.2f} C")
         print(f"  TEMP_VALID = {sc.TEMP_VALID}  (rounded inward from those roots)")
         print(f"  lab_cal_envelope.T_C = (16.0, 33.0)  -- the FIT range, wider than the valid range")
+        return 0
+
+    if args.gap_fill_check:
+        frames = []
+        for sn_dir in sorted(args.out.glob("SN_*")):
+            for f in sorted(sn_dir.glob("*.csv")):
+                frames.append(pd.read_csv(f, usecols=["timestamp", "flow_zero_cal"]).assign(sensor=sn_dir.name))
+        if not frames:
+            print(f"no derived data in {args.out}; run derive.py first")
+            return 1
+        res = gf.holdout_check(pd.concat(frames, ignore_index=True))
+        print(f"gap-fill holdout over all units in {args.out}: {res['n_windows']:,} windows of "
+              f"{gf.HOLDOUT_MIN} hidden minutes; filled/measured median {res['ratio_median']:.3f} "
+              f"(IQR {res['ratio_iqr'][0]:.3f}-{res['ratio_iqr'][1]:.3f}), total bias {res['bias']:+.2%}")
         return 0
 
     written = 0
@@ -145,6 +167,11 @@ def main() -> int:
     print(f"Zero-flow calibration: {int(ok.sum())} units fitted, fleet zero "
           f"{table['fleet_p0_ref'].iloc[0]:.2f} mW at {zf.T_REF:.0f} C; "
           f"{int((~ok).sum())} without a fit (flow_zero_cal = flow_corrected)")
+    gfs = gf.add_gap_fill(args.out)
+    if len(gfs):
+        share = gfs["filled_L"].sum() / (gfs["measured_L"].sum() + gfs["filled_L"].sum())
+        print(f"Gap filling: {int(gfs['n_filled'].sum()):,} of {int(gfs['n_sleeps_during_use'].sum()):,} "
+              f"sleeps during use filled, {gfs['filled_L'].sum():,.0f} L ({share:.1%} of the total)")
     if skipped:
         # Two distinct reasons, reported separately so a failed unit (no sensor
         # payload at all) is not confused with an idle day (never in state 0).

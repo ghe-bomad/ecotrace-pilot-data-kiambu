@@ -8,10 +8,11 @@ python3 src/derive.py
 ```
 
 That writes `data/derived_data/SN_XXXXX/YYYY-MM-DD.csv`: 2,715 files, 841,742
-rows, about 100 MB, roughly 20 s on a laptop. It also writes two small tables of
-the zero-flow calibration, `zero_flow_table.csv` (one row per unit) and
-`zero_flow_weekly.csv` (weekly intercepts); see
-[`../../docs/field_correction.md`](../../docs/field_correction.md) §7. Keeping them out of the repository
+rows, about 105 MB, roughly 30 s on a laptop. It also writes three small
+tables: `zero_flow_table.csv` (one row per unit) and `zero_flow_weekly.csv`
+(weekly intercepts) of the zero-flow calibration
+([`../../docs/field_correction.md`](../../docs/field_correction.md) §7), and
+`gap_fill_summary.csv` (one row per unit) of the gap filling (§8). Keeping them out of the repository
 avoids shipping a pure function of the 207 MB of Parquet already tracked here.
 
 ## Only state 0 is derived
@@ -37,7 +38,7 @@ Downstream code that filters on it is a harmless no-op.
 
 ## Schema
 
-Every emitted CSV has exactly these 12 columns, in this order. The schema is
+Every emitted CSV has exactly these 13 columns, in this order. The schema is
 fixed by `OUTPUT_COLUMNS` in `src/derive.py` and reindexed explicitly, because
 the raw Parquet is *not* schema-stable (16 distinct column sets across the fleet;
 some files carry an extra `msg` column, some lack `temp`).
@@ -54,6 +55,7 @@ some files carry an extra `msg` column, some lack `temp`).
 | `powerF` | mW | **FLOW**-thermistor power, swap-corrected |
 | `flow_corrected` | L/min | flow, King's-law inverse on `powerF` |
 | `flow_zero_cal` | L/min | `flow_corrected` with each unit's zero-flow power, its temperature dependence and weekly drift removed relative to the fleet (`zero_flow.py`); equals `flow_corrected` for a unit without a fit |
+| `gap_fill_L` | L | gas that flowed while the unit slept during use, filled from the flows before and after the sleep and written on the first row after it (`gap_fill.py`); 0 on every other row |
 | `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 17.5 to 30 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
@@ -185,6 +187,28 @@ SN_01010) change by about −27 % and have a much noisier zero; use their
 `flow_zero_cal` with caution. Use it for per-household volumes; for
 cohort-level results the two columns agree. It does not remove the
 absence of a field flow reference described above.
+
+## Computing gas volumes
+
+Rows are one minute apart while a unit measures, so each row's flow in L/min is
+a litre count. Daily gas volume, as used by both analysis repositories, is
+
+```
+sum of flow_zero_cal over rows with flow_zero_cal >= 0.5 L/min   (x 1 min)
++ sum of gap_fill_L
+```
+
+grouped by the day of each row. Rows below 0.5 L/min are idle: a unit at its
+zero still reads about 0.02 L/min. `gap_fill_L` adds the gas that flowed while
+a unit slept during use: about 10,000 such sleeps on the household units, 8.7 %
+of their gas, with a holdout bias of +0.16 %. The method, its validation and its
+limits are in [`../../docs/field_correction.md`](../../docs/field_correction.md)
+§8.
+
+Do not add `gap_fill_L` to a time-weighted integral that already carries
+readings across gaps (flow multiplied by the time since the previous row): that
+counts the sleeps twice. Gas at the start of use, while the unit was still
+asleep, is not filled, so these volumes are a lower bound.
 
 ## What earlier internal revisions emitted, and why it is gone
 

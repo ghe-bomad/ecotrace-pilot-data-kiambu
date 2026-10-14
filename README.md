@@ -18,8 +18,9 @@ repositories (see [Related work](#related-work)).
 
 ```bash
 pip install -r requirements.txt
-python3 src/derive.py            # raw Parquet -> data/derived_data/, ~20 s
-python3 -m pytest src/test_sensor_correction.py
+python3 src/derive.py            # raw Parquet -> data/derived_data/, ~30 s
+python3 -m pytest src            # all tests
+python3 src/derive.py --gap-fill-check   # holdout test of the gap filling
 ```
 
 ## Layout
@@ -61,6 +62,12 @@ and recomputes:
   and its temperature dependence removed relative to the fleet
   ([`docs/field_correction.md`](docs/field_correction.md) §7). Prefer it for
   per-household volumes; the two agree at fleet level.
+- **`gap_fill_L`**, L: gas that flowed while a unit slept during use, filled
+  from the flows before and after the sleep
+  ([`docs/field_correction.md`](docs/field_correction.md) §8). Daily volume is
+  the sum of `flow_zero_cal` over rows at or above 0.5 L/min (one minute each)
+  plus the sum of `gap_fill_L`; see
+  [`data/derived_data/README.md`](data/derived_data/README.md#computing-gas-volumes).
 
 Do not use the raw `flow` or `comp` columns at face value.
 Method, validation and limitations: [`docs/field_correction.md`](docs/field_correction.md).

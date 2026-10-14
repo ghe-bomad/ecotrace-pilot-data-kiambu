@@ -11,7 +11,8 @@ abstract: >-
   raw flow and composition columns are corrupted; the included derivation code
   undoes the channel swap and recomputes both quantities. Release 1.1.0 adds
   flow_zero_cal, the corrected flow with a per-unit, temperature-dependent
-  zero-flow calibration.
+  zero-flow calibration. It also adds gap_fill_L, the gas that flowed while a
+  unit slept during use, filled from the flows before and after the sleep.
 type: dataset
 license: CC-BY-4.0
 version: 1.1.0
