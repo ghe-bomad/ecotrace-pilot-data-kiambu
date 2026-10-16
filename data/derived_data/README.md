@@ -125,10 +125,16 @@ envelope; both columns are emitted outside them.
   reference analyser at RMSE ≈ 8.5 vol-% (bias −0.5, r 0.17, 14 sensors), in the
   no-flow window only. 2.2% of published values sit at the clamp floor of 0.0 and
   none reach the ceiling.
-- **Flow.** The King's-law fit covers `Q ∈ [4, 12] L/min`. Above 12 L/min a
-  pinned extrapolation is used. 7.1% of derived samples and **31% of
-  integrated volume** come from above that ceiling, and `powerF` reaches 2.36
-  times the highest calibrated power.
+- **Flow.** The lab King's-law fit covers `Q ∈ [4, 12] L/min`. Above 12 L/min
+  the curve is not a blind extrapolation of that fit: it keeps the King's-law
+  exponent from CFD simulations of the sensor (`n = 0.573`, simulated at 6, 10,
+  14, 30 and 45 L/min; `calibration_card.json` ->
+  `flow_calibration.cfd_kings_law_gas_scale`) and is anchored to the lab points
+  at 4, 8 and 12 L/min, so its shape is set by the simulations up to 45 L/min.
+  7.1% of derived samples and **31% of integrated volume** lie above 12 L/min
+  (26% between 12 and 18 L/min, 6% between 18 and 45 L/min). Only 2 samples
+  (0.01% of the volume) exceed 45 L/min, the top of the simulated range, where
+  `powerF` reaches 2.36 times the power at 12 L/min.
 
 ## What `flow_corrected` can and cannot claim
 
@@ -153,8 +159,9 @@ per-plant one is the tighter of the two. The spread is attributed mainly to
 per-plant compliance `C` (silt accumulation, build quality, dome geometry),
 which biases the *pressure* side.
 
-This agreement holds *including* the 31% of volume above the calibration
-ceiling, so the extrapolation is supported end to end rather than merely assumed.
+This agreement holds *including* the 31% of volume above 12 L/min, where the
+curve's shape comes from CFD rather than from lab points, so that branch is
+supported end to end rather than merely assumed.
 
 **This comparison is not reproducible from this repository.** The pressure-based
 volume derivation and the comparison against `flow_corrected` both live in

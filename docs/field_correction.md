@@ -80,10 +80,12 @@ temperature-dependent zero.
 - **`flow_corrected`** — L/min from the King's-law inverse on the flow-thermistor
   raw power `P=powerF`:
   - `Q ≤ 12` (P ≤ 45.48 mW): lab CTA fit `Q = ((P − 22.39) / 6.665)²`.
-  - `Q > 12` (past the lab cal max): the **pinned** extrapolation — hold the
+  - `Q > 12` (past the lab cal max): the **CFD-pinned** branch — hold the
     exponent at `n = 0.5733` (`calibration_card.json` ->
-    `flow_calibration.cfd_kings_law_gas_scale.n`) and refit `(a, b)` to the lab
-    anchors at Q = 4, 8, 12, giving `a = 24.62, b = 5.028`. This reproduces the
+    `flow_calibration.cfd_kings_law_gas_scale.n`, from CFD simulations at
+    Q = 6–45 L/min) and refit `(a, b)` to the lab anchors at Q = 4, 8, 12,
+    giving `a = 24.62, b = 5.028`. Up to 45 L/min the shape is therefore set by
+    the simulations, not extrapolated; only 2 derived samples lie above that. This reproduces the
     card's validation value P(Q=45) = 69.2 mW against its stated 69.1. The two
     branches meet to within ~0.04 L/min at the handover (negligible).
 
@@ -196,8 +198,8 @@ swap); they remain in the raw Parquet.
   T-term; its zero's temperature dependence is handled per unit by
   `flow_zero_cal` (§7), not by detrending.
 - **Flow = King's-law hybrid** (not the deployed poly). It is physically
-  grounded (CTA), monotonic, continuous, and extrapolates safely past Q=12 — the
-  failure mode the correction targets. The deployed flow polynomial is not
+  grounded (CTA), monotonic and continuous, and above Q=12 it follows the CFD
+  shape instead of running away, which is where the deployed polynomial fails. The deployed flow polynomial is not
   emitted at all (Stage B).
 - **Handover at Q=12** (P=45.48 mW), continuous to ~0.04 L/min.
 
