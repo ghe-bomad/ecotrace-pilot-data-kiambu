@@ -59,6 +59,9 @@ some files carry an extra `msg` column, some lack `temp`).
 | `comp_corrected` | mole fraction | CH₄ in [0, 1]; NaN unless both flow gates agree there is no flow, and outside 17.5 to 30 °C |
 | `swap_corrected` | bool | provenance flag, always `True` (see below) |
 
+Flows (L/min) and volumes (L) are in standard litres at 20 °C and 101.325 kPa,
+the reference conditions of the laboratory calibration.
+
 Small negative `pressure` values occur (1.5% of rows) and are consistent with
 un-zeroed sensors rather than real suction.
 

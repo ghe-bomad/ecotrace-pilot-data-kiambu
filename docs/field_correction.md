@@ -77,7 +77,8 @@ temperature-dependent zero.
   **crosses zero at 17.32 °C and 30.19 °C**, so outside those roots it can only
   return a clamped 0.0 (§5). Run `python3 src/derive.py --temp-window-scan` to
   reprint the roots from the coefficients.
-- **`flow_corrected`** — L/min from the King's-law inverse on the flow-thermistor
+- **`flow_corrected`** — L/min (standard litres at 20 °C and 101.325 kPa, the
+  laboratory calibration's reference conditions) from the King's-law inverse on the flow-thermistor
   raw power `P=powerF`:
   - `Q ≤ 12` (P ≤ 45.48 mW): lab CTA fit `Q = ((P − 22.39) / 6.665)²`.
   - `Q > 12` (past the lab cal max): the **CFD-pinned** branch — hold the
